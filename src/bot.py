@@ -92,28 +92,31 @@ class TrendBreakBot:
         self._lock = asyncio.Lock()
 
     # ------------------------------------------------------------------
-    # Trend Analysis
+    # Trend Analysis — son N mumdan ÖNCE oluşan kanalı kullan
     # ------------------------------------------------------------------
     def analyze_trend(self) -> Optional[TrendAnalysis]:
         n = self.config.trend_period
-        if len(self.candles) < n:
+        # Kanal için: son n mumu kullan (kapanan mum dahil)
+        if len(self.candles) < n + 1:
             return None
 
-        recent = self.candles[-n:]
-        trend_high = max(c.high for c in recent)
-        trend_low = min(c.low for c in recent)
+        # Kanal: son n mumun bir önceki versiyonu (trend-before-breakout)
+        channel = self.candles[-(n+1):-1]  # breakout teyidi için önceki pencere
 
-        up = sum(1 for i in range(1, len(recent)) if recent[i].close > recent[i-1].close)
-        down = len(recent) - 1 - up
+        trend_high = max(c.high for c in channel)
+        trend_low  = min(c.low  for c in channel)
 
-        if up > down * 1.5:
+        up   = sum(1 for i in range(1, len(channel)) if channel[i].close > channel[i-1].close)
+        down = len(channel) - 1 - up
+
+        if up > down * 1.2:
             direction = "up"
-        elif down > up * 1.5:
+        elif down > up * 1.2:
             direction = "down"
         else:
             direction = "sideways"
 
-        strength = max(up, down) / max((len(recent) - 1), 1)
+        strength = max(up, down) / max((len(channel) - 1), 1)
 
         return TrendAnalysis(
             direction=direction,

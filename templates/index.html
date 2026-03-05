@@ -299,94 +299,130 @@ function renderLog(logs) {
 }
 
 // ─── Chart ────────────────────────────────────────────────────────────────────
+let _chartW = 0;
+const _chartH = 300;
+
 function initChart() {
   const canvas = document.getElementById('chart');
-  canvas.width = canvas.offsetWidth * window.devicePixelRatio;
-  canvas.height = 300 * window.devicePixelRatio;
-  canvas.style.width = canvas.offsetWidth + 'px';
-  canvas.style.height = '300px';
+  const dpr = window.devicePixelRatio || 1;
+  // Use parent container width (panel minus padding)
+  const wrap = canvas.closest('.chart-wrap') || canvas.parentElement;
+  const cssW = Math.max(200, wrap.clientWidth - 2);
+  _chartW = cssW;
+  canvas.style.width  = cssW + 'px';
+  canvas.style.height = _chartH + 'px';
+  canvas.width  = Math.round(cssW * dpr);
+  canvas.height = Math.round(_chartH * dpr);
   chartCtx = canvas.getContext('2d');
-  chartCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  chartCtx.setTransform(dpr, 0, 0, dpr, 0, 0); // reset transform, then scale once
 }
 
 function drawChart(candles, price, pos, trend) {
+  // Re-init if canvas size changed or context lost
+  const canvas = document.getElementById('chart');
+  if (!chartCtx || canvas.clientWidth !== _chartW) initChart();
   if (!chartCtx) return;
-  const W = chartCtx.canvas.width / window.devicePixelRatio;
-  const H = 300;
+
+  const W = _chartW, H = _chartH;
   const ctx = chartCtx;
   ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = '#030810'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#030810';
+  ctx.fillRect(0, 0, W, H);
 
-  if (!candles || candles.length < 2) return;
+  if (!candles || candles.length < 2) {
+    ctx.fillStyle = 'rgba(168,200,232,0.25)';
+    ctx.font = '13px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('Başlatmak için ▶ BAŞLAT butonuna tıklayın', W/2, H/2);
+    return;
+  }
 
-  const pad = { top: 16, bottom: 26, left: 8, right: 58 };
+  const pad = { top: 18, bottom: 24, left: 4, right: 64 };
   const cw = W - pad.left - pad.right;
   const ch = H - pad.top - pad.bottom;
 
-  const prices = candles.flatMap(c => [c.h, c.l]);
-  let minP = Math.min(...prices), maxP = Math.max(...prices);
-  const range = (maxP - minP) || 1;
-  minP -= range * 0.06; maxP += range * 0.06;
-
-  const toY = p => pad.top + ch - ((p - minP) / (maxP - minP)) * ch;
+  // Price range
+  const allPrices = candles.flatMap(c => [c.h, c.l]);
+  let minP = Math.min(...allPrices), maxP = Math.max(...allPrices);
+  const rng = (maxP - minP) || 1;
+  minP -= rng * 0.07; maxP += rng * 0.07;
+  const toY = p => pad.top + ch * (1 - (p - minP) / (maxP - minP));
 
   // Grid
-  ctx.strokeStyle = 'rgba(13,32,64,.8)'; ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(13,32,64,.7)'; ctx.lineWidth = 1;
   for (let i = 0; i <= 4; i++) {
     const y = pad.top + (ch / 4) * i;
+    const pv = maxP - ((maxP - minP) / 4) * i;
     ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
-    const p2 = maxP - ((maxP - minP) / 4) * i;
-    ctx.fillStyle = 'rgba(42,64,96,.9)'; ctx.font = '9px Share Tech Mono'; ctx.textAlign = 'left';
-    ctx.fillText(p2.toFixed(0), W - pad.right + 4, y + 3);
+    ctx.fillStyle = 'rgba(42,64,96,.85)'; ctx.font = '9px monospace'; ctx.textAlign = 'left';
+    ctx.fillText(pv.toFixed(0), W - pad.right + 4, y + 3);
   }
 
-  // Trend lines
+  // Trend channel
   if (trend) {
-    ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
-    ctx.strokeStyle = 'rgba(255,51,85,.5)';
-    ctx.beginPath(); ctx.moveTo(pad.left, toY(trend.trend_high)); ctx.lineTo(W - pad.right, toY(trend.trend_high)); ctx.stroke();
-    ctx.strokeStyle = 'rgba(0,255,136,.5)';
-    ctx.beginPath(); ctx.moveTo(pad.left, toY(trend.trend_low)); ctx.lineTo(W - pad.right, toY(trend.trend_low)); ctx.stroke();
+    const thY = toY(trend.trend_high);
+    const tlY = toY(trend.trend_low);
+    // Fill channel area
+    ctx.fillStyle = 'rgba(0,212,255,0.03)';
+    ctx.fillRect(pad.left, thY, cw, tlY - thY);
+    // Lines
+    ctx.setLineDash([5, 4]); ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255,51,85,.75)';
+    ctx.beginPath(); ctx.moveTo(pad.left, thY); ctx.lineTo(W - pad.right, thY); ctx.stroke();
+    ctx.strokeStyle = 'rgba(0,255,136,.75)';
+    ctx.beginPath(); ctx.moveTo(pad.left, tlY); ctx.lineTo(W - pad.right, tlY); ctx.stroke();
     ctx.setLineDash([]);
+    // Labels on right
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(255,51,85,.9)'; ctx.font = '9px monospace';
+    ctx.fillText('R ' + trend.trend_high.toFixed(0), W - pad.right - 2, thY - 3);
+    ctx.fillStyle = 'rgba(0,255,136,.9)';
+    ctx.fillText('S ' + trend.trend_low.toFixed(0), W - pad.right - 2, tlY + 10);
   }
 
   // Candles
-  const display = Math.min(candles.length, 70);
-  const start = candles.length - display;
-  const candleW = cw / display;
-  const body = Math.max(1.5, candleW * 0.6);
+  const display = Math.min(candles.length, 80);
+  const start   = candles.length - display;
+  const cndW    = cw / display;
+  const bodyW   = Math.max(1.5, cndW * 0.65);
 
   for (let i = 0; i < display; i++) {
-    const c = candles[start + i];
-    const x = pad.left + i * candleW + candleW / 2;
+    const c   = candles[start + i];
+    const x   = pad.left + (i + 0.5) * cndW;
     const col = c.c >= c.o ? '#00ff88' : '#ff3355';
     ctx.strokeStyle = col; ctx.lineWidth = 1;
+    // Wick
     ctx.beginPath(); ctx.moveTo(x, toY(c.h)); ctx.lineTo(x, toY(c.l)); ctx.stroke();
+    // Body
     const bTop = toY(Math.max(c.o, c.c));
-    const bH = Math.max(1, toY(Math.min(c.o, c.c)) - bTop);
-    ctx.fillStyle = col; ctx.fillRect(x - body/2, bTop, body, bH);
+    const bBot = toY(Math.min(c.o, c.c));
+    ctx.fillStyle = col;
+    ctx.fillRect(x - bodyW/2, bTop, bodyW, Math.max(1.5, bBot - bTop));
   }
 
-  // Price line
-  if (price > 0) {
+  // Current price tag
+  if (price > 0 && price >= minP && price <= maxP) {
     const py = toY(price);
-    ctx.strokeStyle = 'rgba(0,212,255,.8)'; ctx.lineWidth = 1; ctx.setLineDash([2, 4]);
+    ctx.strokeStyle = 'rgba(0,212,255,.85)'; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
     ctx.beginPath(); ctx.moveTo(pad.left, py); ctx.lineTo(W - pad.right, py); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = '#00d4ff'; ctx.font = 'bold 10px Share Tech Mono'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#00d4ff';
+    ctx.fillRect(W - pad.right + 1, py - 8, 60, 14);
+    ctx.fillStyle = '#000918'; ctx.font = 'bold 9px monospace'; ctx.textAlign = 'left';
     ctx.fillText(price.toFixed(1), W - pad.right + 4, py + 3);
   }
 
-  // Entry line
-  if (pos) {
-    const ey = toY(pos.entry_price);
-    ctx.strokeStyle = pos.side === 'long' ? 'rgba(0,255,136,.9)' : 'rgba(255,51,85,.9)';
-    ctx.lineWidth = 1.5; ctx.setLineDash([6, 3]);
+  // Entry price tag
+  if (pos && pos.entry_price >= minP && pos.entry_price <= maxP) {
+    const ey  = toY(pos.entry_price);
+    const col = pos.side === 'long' ? '#00ff88' : '#ff3355';
+    ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.setLineDash([6, 3]);
     ctx.beginPath(); ctx.moveTo(pad.left, ey); ctx.lineTo(W - pad.right, ey); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = pos.side === 'long' ? '#00ff88' : '#ff3355';
-    ctx.font = '9px Share Tech Mono'; ctx.textAlign = 'left';
-    ctx.fillText('ENTRY', W - pad.right + 4, ey + 3);
+    ctx.fillStyle = col;
+    ctx.fillRect(W - pad.right + 1, ey - 8, 60, 14);
+    ctx.fillStyle = '#000'; ctx.font = 'bold 9px monospace'; ctx.textAlign = 'left';
+    ctx.fillText('ENTRY', W - pad.right + 3, ey + 3);
   }
 }
 
@@ -419,7 +455,10 @@ document.getElementById('mode').addEventListener('change', function() {
 window.addEventListener('load', () => {
   initChart();
   connectWS();
-  window.addEventListener('resize', () => { initChart(); if (lastState) renderState(lastState); });
+  window.addEventListener('resize', () => {
+    initChart();
+    if (lastState) drawChart(lastState.candles, lastState.current_price, lastState.position, lastState.trend);
+  });
 });
 </script>
 </body>

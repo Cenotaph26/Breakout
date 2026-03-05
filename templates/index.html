@@ -5,67 +5,70 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TrendBreak Bot</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&display=swap');
-  :root{--bg:#030810;--panel:#070f1e;--border:#0d2040;--accent:#00d4ff;--green:#00ff88;--red:#ff3355;--yellow:#ffcc00;--text:#a8c8e8;--dim:#2a4060}
-  *{margin:0;padding:0;box-sizing:border-box}
-  body{background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;min-height:100vh}
-  body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,212,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
-  .container{position:relative;z-index:1;max-width:1400px;margin:0 auto;padding:16px}
-  header{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border:1px solid var(--border);background:var(--panel);margin-bottom:16px;clip-path:polygon(0 0,calc(100% - 20px) 0,100% 20px,100% 100%,0 100%)}
-  .logo{font-family:'Share Tech Mono',monospace;font-size:22px;color:var(--accent);letter-spacing:4px;text-shadow:0 0 20px rgba(0,212,255,.6)}
-  .logo span{color:var(--green)}
-  .status-badge{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;letter-spacing:2px;text-transform:uppercase}
-  .dot{width:8px;height:8px;border-radius:50%;background:var(--dim);transition:all .3s}
-  .dot.active{background:var(--green);box-shadow:0 0 10px var(--green);animation:pulse 1s infinite}
-  .dot.stopped{background:var(--red);box-shadow:0 0 10px var(--red)}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-  .grid{display:grid;grid-template-columns:300px 1fr 280px;gap:16px}
-  .panel{background:var(--panel);border:1px solid var(--border);padding:16px;position:relative}
-  .panel-title{font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:3px;color:var(--accent);text-transform:uppercase;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--border)}
-  .config-row{margin-bottom:12px}
-  label{display:block;font-size:11px;letter-spacing:2px;color:var(--dim);text-transform:uppercase;margin-bottom:5px}
-  input,select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:13px;outline:none;transition:border-color .2s}
-  input:focus,select:focus{border-color:var(--accent)}
-  select option{background:var(--bg)}
-  .btn{width:100%;padding:11px;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;letter-spacing:3px;text-transform:uppercase;border:none;cursor:pointer;transition:all .2s;clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%);margin-bottom:8px}
-  .btn-start{background:linear-gradient(135deg,#004d20,#00ff88);color:#001a0d}
-  .btn-start:hover{filter:brightness(1.2);box-shadow:0 0 20px rgba(0,255,136,.4)}
-  .btn-stop{background:linear-gradient(135deg,#4d0010,#ff3355);color:#1a0008}
-  .btn-stop:hover{filter:brightness(1.2);box-shadow:0 0 20px rgba(255,51,85,.4)}
-  .btn:disabled{opacity:.4;cursor:not-allowed}
-  .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);margin-top:1px}
-  .stat{background:var(--panel);padding:12px;text-align:center}
-  .stat-value{font-family:'Share Tech Mono',monospace;font-size:18px;font-weight:600;display:block}
-  .stat-label{font-size:10px;letter-spacing:2px;color:var(--dim);text-transform:uppercase;margin-top:2px}
-  .pos{color:var(--green)}.neg{color:var(--red)}.neu{color:var(--accent)}.warn{color:var(--yellow)}
-  canvas#chart{width:100%;height:300px;display:block;border-bottom:1px solid var(--border)}
-  .chart-wrap{position:relative}
-  .chart-wrap::after{content:'';position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,rgba(0,212,255,.3),transparent);animation:scan 3s linear infinite;pointer-events:none;top:0}
-  @keyframes scan{0%{top:0}100%{top:300px}}
-  .position-display{text-align:center;padding:16px 0}
-  .pos-icon{font-size:44px;margin-bottom:6px;filter:drop-shadow(0 0 10px currentColor)}
-  .pos-label{font-size:26px;font-weight:700;letter-spacing:4px}
-  .pos-price{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--dim);margin-top:6px}
-  .pos-pnl{font-family:'Share Tech Mono',monospace;font-size:20px;margin-top:10px;font-weight:600}
-  .trend-box{border:1px solid var(--border);padding:10px;margin-bottom:10px;text-align:center}
-  .trend-arrow{font-size:30px;display:block;line-height:1;margin-bottom:3px;filter:drop-shadow(0 0 8px currentColor)}
-  .trend-text{font-size:12px;letter-spacing:3px;text-transform:uppercase;font-weight:600}
-  .log-container{height:260px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
-  .log-entry{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:start;padding:7px 0;border-bottom:1px solid rgba(13,32,64,.5);font-size:11px;animation:fadeIn .3s ease}
-  @keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
-  .log-time{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--dim);white-space:nowrap}
-  .log-badge{font-size:9px;font-weight:700;letter-spacing:1px;padding:2px 5px;border-radius:2px;display:inline-block;margin-right:4px}
-  .badge-long{background:rgba(0,255,136,.15);color:var(--green);border:1px solid rgba(0,255,136,.3)}
-  .badge-short{background:rgba(255,51,85,.15);color:var(--red);border:1px solid rgba(255,51,85,.3)}
-  .badge-close{background:rgba(0,212,255,.15);color:var(--accent);border:1px solid rgba(0,212,255,.3)}
-  .badge-info{background:rgba(255,204,0,.1);color:var(--yellow);border:1px solid rgba(255,204,0,.2)}
-  .separator{height:1px;background:var(--border);margin:12px 0}
-  .candle-info{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
-  .candle-stat{background:var(--bg);padding:7px;border:1px solid var(--border)}
-  .cs-label{font-size:9px;color:var(--dim);letter-spacing:1px;text-transform:uppercase}
-  .cs-val{font-family:'Share Tech Mono',monospace;font-size:13px;margin-top:2px}
-  .conn-indicator{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--dim);text-align:right;margin-top:8px}
-  @media(max-width:1100px){.grid{grid-template-columns:270px 1fr}.grid>*:last-child{grid-column:span 2}}
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&display=swap');
+:root{--bg:#030810;--panel:#070f1e;--border:#0d2040;--accent:#00d4ff;--green:#00ff88;--red:#ff3355;--yellow:#ffcc00;--text:#a8c8e8;--dim:#2a4060}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;min-height:100vh}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,212,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+.container{position:relative;z-index:1;max-width:1400px;margin:0 auto;padding:16px}
+header{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border:1px solid var(--border);background:var(--panel);margin-bottom:16px;clip-path:polygon(0 0,calc(100% - 20px) 0,100% 20px,100% 100%,0 100%)}
+.logo{font-family:'Share Tech Mono',monospace;font-size:22px;color:var(--accent);letter-spacing:4px;text-shadow:0 0 20px rgba(0,212,255,.6)}
+.logo span{color:var(--green)}
+.status-badge{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;letter-spacing:2px;text-transform:uppercase}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--dim);transition:all .3s}
+.dot.active{background:var(--green);box-shadow:0 0 10px var(--green);animation:pulse 1s infinite}
+.dot.stopped{background:var(--red);box-shadow:0 0 10px var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.grid{display:grid;grid-template-columns:300px 1fr 290px;gap:16px}
+.panel{background:var(--panel);border:1px solid var(--border);padding:16px;position:relative}
+.panel-title{font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:3px;color:var(--accent);text-transform:uppercase;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.config-row{margin-bottom:11px}
+label{display:block;font-size:11px;letter-spacing:2px;color:var(--dim);text-transform:uppercase;margin-bottom:5px}
+input,select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;font-family:'Share Tech Mono',monospace;font-size:13px;outline:none;transition:border-color .2s}
+input:focus,select:focus{border-color:var(--accent)}
+select option{background:var(--bg)}
+.btn{width:100%;padding:11px;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;letter-spacing:3px;text-transform:uppercase;border:none;cursor:pointer;transition:all .2s;clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%);margin-bottom:8px}
+.btn-start{background:linear-gradient(135deg,#004d20,#00ff88);color:#001a0d}
+.btn-start:hover{filter:brightness(1.2);box-shadow:0 0 20px rgba(0,255,136,.4)}
+.btn-stop{background:linear-gradient(135deg,#4d0010,#ff3355);color:#1a0008}
+.btn-stop:hover{filter:brightness(1.2);box-shadow:0 0 20px rgba(255,51,85,.4)}
+.btn:disabled{opacity:.4;cursor:not-allowed;filter:none!important;box-shadow:none!important}
+.api-section{background:rgba(0,212,255,.04);border:1px solid rgba(0,212,255,.18);padding:10px;margin-bottom:10px;border-radius:2px}
+.api-note{font-size:10px;color:var(--yellow);margin-top:6px;letter-spacing:.5px}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);margin-top:1px}
+.stat{background:var(--panel);padding:12px;text-align:center}
+.stat-value{font-family:'Share Tech Mono',monospace;font-size:18px;font-weight:600;display:block}
+.stat-label{font-size:10px;letter-spacing:2px;color:var(--dim);text-transform:uppercase;margin-top:2px}
+.pos{color:var(--green)}.neg{color:var(--red)}.neu{color:var(--accent)}.warn{color:var(--yellow)}
+canvas#chart{width:100%;height:300px;display:block;border-bottom:1px solid var(--border)}
+.chart-wrap{position:relative}
+.chart-wrap::after{content:'';position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,212,255,.3),transparent);animation:scan 4s linear infinite;pointer-events:none;top:0}
+@keyframes scan{0%{top:0;opacity:.7}100%{top:300px;opacity:0}}
+.position-display{text-align:center;padding:14px 0}
+.pos-icon{font-size:42px;margin-bottom:6px;filter:drop-shadow(0 0 10px currentColor)}
+.pos-label{font-size:24px;font-weight:700;letter-spacing:4px}
+.pos-price{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--dim);margin-top:5px}
+.pos-pnl{font-family:'Share Tech Mono',monospace;font-size:20px;margin-top:10px;font-weight:600}
+.trend-box{border:1px solid var(--border);padding:10px;margin-bottom:10px;text-align:center}
+.trend-arrow{font-size:30px;display:block;line-height:1;margin-bottom:3px;filter:drop-shadow(0 0 8px currentColor)}
+.trend-text{font-size:12px;letter-spacing:3px;text-transform:uppercase;font-weight:600}
+.log-container{height:580px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.log-entry{padding:7px 2px 7px 0;border-bottom:1px solid rgba(13,32,64,.5);animation:fadeIn .25s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
+.log-time{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--dim);display:block;margin-bottom:3px}
+.log-badge{font-size:9px;font-weight:700;letter-spacing:1px;padding:2px 5px;border-radius:2px;display:inline-block;margin-right:4px;vertical-align:middle}
+.badge-long{background:rgba(0,255,136,.15);color:var(--green);border:1px solid rgba(0,255,136,.3)}
+.badge-short{background:rgba(255,51,85,.15);color:var(--red);border:1px solid rgba(255,51,85,.3)}
+.badge-close{background:rgba(0,212,255,.15);color:var(--accent);border:1px solid rgba(0,212,255,.3)}
+.badge-info{background:rgba(255,204,0,.1);color:var(--yellow);border:1px solid rgba(255,204,0,.2)}
+.log-pnl{font-family:'Share Tech Mono',monospace;font-size:10px;margin-top:2px;padding-left:2px}
+.separator{height:1px;background:var(--border);margin:10px 0}
+.candle-info{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
+.candle-stat{background:var(--bg);padding:7px;border:1px solid var(--border)}
+.cs-label{font-size:9px;color:var(--dim);letter-spacing:1px;text-transform:uppercase}
+.cs-val{font-family:'Share Tech Mono',monospace;font-size:13px;margin-top:2px}
+.conn-indicator{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--dim);text-align:right;margin-top:8px}
+@media(max-width:1100px){.grid{grid-template-columns:270px 1fr}.grid>*:last-child{grid-column:span 2}}
 </style>
 </head>
 <body>
@@ -80,31 +83,59 @@
   </header>
 
   <div class="grid">
-    <!-- Config -->
-    <div>
+    <!-- LEFT: Config + Position -->
+    <div style="display:flex;flex-direction:column;gap:16px">
       <div class="panel">
         <div class="panel-title">⚙ Ayarlar</div>
-        <div class="config-row"><label>Sembol</label><input id="symbol" value="BTCUSDT"></div>
+
+        <div class="config-row">
+          <label>Sembol</label>
+          <input id="symbol" value="BTCUSDT">
+        </div>
+
         <div class="config-row">
           <label>Mod</label>
-          <select id="mode">
+          <select id="mode" onchange="onModeChange()">
             <option value="sim">📊 Simülasyon</option>
-            <option value="live">⚡ Binance Live</option>
+            <option value="live">⚡ Binance Live / Demo</option>
           </select>
         </div>
+
+        <!-- API credentials — visible only in live mode -->
+        <div id="apiSection" class="api-section" style="display:none">
+          <div class="config-row" style="margin-bottom:8px">
+            <label>API Key</label>
+            <input type="password" id="apiKey" placeholder="Binance API key" autocomplete="off">
+          </div>
+          <div class="config-row" style="margin-bottom:8px">
+            <label>API Secret</label>
+            <input type="password" id="apiSecret" placeholder="Binance API secret" autocomplete="off">
+          </div>
+          <div class="config-row" style="margin-bottom:0">
+            <label>Hesap Tipi</label>
+            <select id="accountType">
+              <option value="USDT_FUTURES">USDT Futures (Perp)</option>
+              <option value="SPOT">Spot</option>
+              <option value="COIN_FUTURES">COIN Futures</option>
+            </select>
+          </div>
+          <div class="api-note">⚠ Demo hesap için Binance Demo API key kullanın. Canlı işlem açmaz.</div>
+        </div>
+
         <div class="config-row"><label>Trend Periyodu (Mum)</label><input type="number" id="trendPeriod" value="5" min="3" max="20"></div>
         <div class="config-row"><label>Kırılma Eşiği (%)</label><input type="number" id="breakThreshold" value="0.05" step="0.01" min="0.01"></div>
         <div class="config-row"><label>İşlem Büyüklüğü (USDT)</label><input type="number" id="tradeSize" value="100" min="10"></div>
         <div class="config-row"><label>Kaldıraç</label><input type="number" id="leverage" value="5" min="1" max="125"></div>
         <div class="config-row"><label>Stop Loss (%)</label><input type="number" id="stopLoss" value="0.5" step="0.1" min="0.1"></div>
-        <div class="config-row" id="tickRow"><label>Sim Tick Hızı (sn)</label><input type="number" id="tickInterval" value="2" step="0.5" min="0.5"></div>
+        <div id="tickRow" class="config-row"><label>Sim Tick Hızı (sn)</label><input type="number" id="tickInterval" value="2" step="0.5" min="0.5"></div>
+
         <div class="separator"></div>
         <button class="btn btn-start" id="startBtn" onclick="startBot()">▶ BAŞLAT</button>
-        <button class="btn btn-stop" id="stopBtn" onclick="stopBot()" disabled>■ DURDUR</button>
+        <button class="btn btn-stop"  id="stopBtn"  onclick="stopBot()" disabled>■ DURDUR</button>
         <div class="conn-indicator" id="connStatus">WS: bağlanıyor...</div>
       </div>
 
-      <div class="panel" style="margin-top:16px">
+      <div class="panel">
         <div class="panel-title">📈 Açık Pozisyon</div>
         <div class="position-display" id="positionDisplay">
           <div class="pos-icon" style="color:var(--dim)">—</div>
@@ -113,8 +144,8 @@
       </div>
     </div>
 
-    <!-- Chart -->
-    <div>
+    <!-- CENTER: Chart + Trend -->
+    <div style="display:flex;flex-direction:column;gap:16px">
       <div class="panel chart-wrap" style="padding:12px">
         <div class="panel-title" id="chartTitle">📊 — 1 DAKİKA</div>
         <canvas id="chart"></canvas>
@@ -126,7 +157,7 @@
         </div>
       </div>
 
-      <div class="panel" style="margin-top:16px;padding:12px">
+      <div class="panel" style="padding:12px">
         <div class="panel-title">🔍 Trend Analizi</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div>
@@ -146,7 +177,7 @@
       </div>
     </div>
 
-    <!-- Log -->
+    <!-- RIGHT: Log -->
     <div class="panel">
       <div class="panel-title">📋 İşlem Günlüğü</div>
       <div class="log-container" id="tradeLog"></div>
@@ -155,303 +186,278 @@
 </div>
 
 <script>
-// ─── WebSocket ────────────────────────────────────────────────────────────────
-let ws = null;
-let chartCtx = null;
-let lastCandles = [];
+// ── State ─────────────────────────────────────────────────────
+let ws        = null;
+let chartCtx  = null;
 let lastState = null;
-let logRendered = new Set();
+let _chartW   = 0;
+const _chartH = 300;
 
+// Dedup: key = `${ts}_${msg}` so identical-ts entries with different msg still show
+const _seenLog = new Set();
+
+// ── WebSocket ─────────────────────────────────────────────────
 function connectWS() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   ws = new WebSocket(`${proto}://${location.host}/ws`);
+
   ws.onopen = () => {
     document.getElementById('connStatus').textContent = 'WS: bağlı ✓';
     document.getElementById('connStatus').style.color = 'var(--green)';
   };
   ws.onmessage = e => {
-    const state = JSON.parse(e.data);
-    lastState = state;
-    renderState(state);
+    try { const s = JSON.parse(e.data); lastState = s; renderState(s); } catch(_){}
   };
   ws.onclose = () => {
-    document.getElementById('connStatus').textContent = 'WS: bağlantı kesildi — yeniden bağlanıyor...';
+    document.getElementById('connStatus').textContent = 'WS: yeniden bağlanıyor...';
     document.getElementById('connStatus').style.color = 'var(--red)';
     setTimeout(connectWS, 3000);
   };
   ws.onerror = () => ws.close();
 }
 
-// ─── Render State ─────────────────────────────────────────────────────────────
+// ── Render ────────────────────────────────────────────────────
 function renderState(s) {
-  // Status
+  // Status dot
   const dot = document.getElementById('statusDot');
   const txt = document.getElementById('statusText');
   if (s.running) {
-    dot.className = 'dot active'; txt.textContent = 'ÇALIŞIYOR';
+    dot.className='dot active'; txt.textContent='ÇALIŞIYOR';
     document.getElementById('startBtn').disabled = true;
-    document.getElementById('stopBtn').disabled = false;
+    document.getElementById('stopBtn').disabled  = false;
   } else {
-    dot.className = 'dot stopped'; txt.textContent = 'DURDURULDU';
+    dot.className='dot stopped'; txt.textContent='DURDURULDU';
     document.getElementById('startBtn').disabled = false;
-    document.getElementById('stopBtn').disabled = true;
+    document.getElementById('stopBtn').disabled  = true;
   }
 
   // Price & stats
   if (s.current_price) {
     document.getElementById('statPrice').textContent = s.current_price.toFixed(2);
-    document.getElementById('chartTitle').textContent = `📊 ${s.config?.symbol || ''} — 1 DAKİKA`;
+    document.getElementById('chartTitle').textContent = `📊 ${s.config?.symbol||''} — 1 DAKİKA`;
   }
-
   if (s.stats) {
     const pnl = s.stats.total_pnl || 0;
-    const pnlEl = document.getElementById('statPnl');
-    pnlEl.textContent = `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}$`;
-    pnlEl.className = 'stat-value ' + (pnl >= 0 ? 'pos' : 'neg');
-    document.getElementById('statTrades').textContent = s.stats.total_trades || 0;
-    const wr = s.stats.win_rate;
-    const wrEl = document.getElementById('statWin');
-    wrEl.textContent = wr !== undefined ? `${wr}%` : '—';
-    wrEl.className = 'stat-value ' + (wr >= 50 ? 'pos' : 'neg');
+    const el  = document.getElementById('statPnl');
+    el.textContent = `${pnl>=0?'+':''}${pnl.toFixed(2)}$`;
+    el.className   = 'stat-value '+(pnl>=0?'pos':'neg');
+    document.getElementById('statTrades').textContent = s.stats.total_trades||0;
+    const wr = s.stats.win_rate, wEl = document.getElementById('statWin');
+    wEl.textContent = wr!==undefined ? `${wr}%` : '—';
+    wEl.className   = 'stat-value '+(wr>=50?'pos':'neg');
   }
 
-  // Trend
-  if (s.trend) renderTrend(s.trend);
-
-  // Position
+  if (s.trend)   renderTrend(s.trend);
   renderPosition(s.position, s.current_price);
+  if (s.candles?.length > 0) drawChart(s.candles, s.current_price, s.position, s.trend);
 
-  // Chart
-  if (s.candles && s.candles.length > 0) {
-    lastCandles = s.candles;
-    drawChart(s.candles, s.current_price, s.position, s.trend);
-  }
-
-  // Log
+  // ↓ KEY FIX: push-only log — never clear, never re-render existing
   if (s.trade_log) renderLog(s.trade_log);
 }
 
 function renderTrend(t) {
-  const arrow = document.getElementById('trendArrow');
-  const label = document.getElementById('trendLabel');
-  const desc = document.getElementById('trendDesc');
-  const dirs = {
-    up: { a: '↑', c: 'var(--green)', l: 'YÜKSELİŞ' },
-    down: { a: '↓', c: 'var(--red)', l: 'DÜŞÜŞ' },
-    sideways: { a: '↔', c: 'var(--yellow)', l: 'YATAY' },
-  };
-  const d = dirs[t.direction] || dirs.sideways;
-  arrow.textContent = d.a; arrow.style.color = d.c;
-  label.textContent = d.l; label.style.color = d.c;
-  desc.textContent = `${t.up_candles}↑ ${t.down_candles}↓ | Güç: ${(t.strength * 100).toFixed(0)}%`;
-  document.getElementById('tHigh').textContent = t.trend_high?.toFixed(2) || '—';
-  document.getElementById('tLow').textContent = t.trend_low?.toFixed(2) || '—';
-  if (t.direction === 'up') {
-    document.getElementById('breakLevel').textContent = t.trend_high?.toFixed(2) || '—';
-    document.getElementById('expectedDir').textContent = '↑ LONG';
-    document.getElementById('expectedDir').style.color = 'var(--green)';
-  } else {
-    document.getElementById('breakLevel').textContent = t.trend_low?.toFixed(2) || '—';
-    document.getElementById('expectedDir').textContent = '↓ SHORT';
-    document.getElementById('expectedDir').style.color = 'var(--red)';
-  }
+  const map = {up:{a:'↑',c:'var(--green)',l:'YÜKSELİŞ'},down:{a:'↓',c:'var(--red)',l:'DÜŞÜŞ'},sideways:{a:'↔',c:'var(--yellow)',l:'YATAY'}};
+  const d = map[t.direction]||map.sideways;
+  const ar=document.getElementById('trendArrow'), lb=document.getElementById('trendLabel');
+  ar.textContent=d.a; ar.style.color=d.c; lb.textContent=d.l; lb.style.color=d.c;
+  document.getElementById('trendDesc').textContent = `${t.up_candles}↑ ${t.down_candles}↓ | Güç: ${(t.strength*100).toFixed(0)}%`;
+  document.getElementById('tHigh').textContent      = t.trend_high?.toFixed(2)||'—';
+  document.getElementById('tLow').textContent       = t.trend_low?.toFixed(2)||'—';
+  const isUp = t.direction==='up';
+  document.getElementById('breakLevel').textContent = (isUp?t.trend_high:t.trend_low)?.toFixed(2)||'—';
+  const ed=document.getElementById('expectedDir');
+  ed.textContent=isUp?'↑ LONG':'↓ SHORT'; ed.style.color=isUp?'var(--green)':'var(--red)';
 }
 
 function renderPosition(pos, price) {
   const el = document.getElementById('positionDisplay');
   if (!pos) {
-    el.innerHTML = `<div class="pos-icon" style="color:var(--dim)">—</div><div class="pos-label" style="color:var(--dim)">YOK</div>`;
+    el.innerHTML='<div class="pos-icon" style="color:var(--dim)">—</div><div class="pos-label" style="color:var(--dim)">YOK</div>';
     return;
   }
-  const pnl = pos.unrealized_pnl || 0;
-  const col = pos.side === 'long' ? 'var(--green)' : 'var(--red)';
-  el.innerHTML = `
-    <div class="pos-icon" style="color:${col}">${pos.side === 'long' ? '▲' : '▼'}</div>
+  const pnl=pos.unrealized_pnl||0, col=pos.side==='long'?'var(--green)':'var(--red)';
+  el.innerHTML=`
+    <div class="pos-icon" style="color:${col}">${pos.side==='long'?'▲':'▼'}</div>
     <div class="pos-label" style="color:${col}">${pos.side.toUpperCase()}</div>
     <div class="pos-price">Giriş: ${pos.entry_price?.toFixed(2)}</div>
     <div class="pos-price">${pos.size_usdt}$ × ${pos.leverage}x</div>
-    <div class="pos-pnl" style="color:${pnl >= 0 ? 'var(--green)' : 'var(--red)'}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}$</div>
-    <div style="font-size:10px;color:var(--dim);margin-top:4px">SL: ${pos.stop_loss?.toFixed(2)}</div>
-  `;
+    <div class="pos-pnl" style="color:${pnl>=0?'var(--green)':'var(--red)'}">${pnl>=0?'+':''}${pnl.toFixed(2)}$</div>
+    <div style="font-size:10px;color:var(--dim);margin-top:4px">SL: ${pos.stop_loss?.toFixed(2)}</div>`;
 }
 
 function renderLog(logs) {
   const el = document.getElementById('tradeLog');
   const badges = {
-    long: '<span class="log-badge badge-long">LONG</span>',
-    short: '<span class="log-badge badge-short">SHORT</span>',
-    close: '<span class="log-badge badge-close">KAPAT</span>',
-    info: '<span class="log-badge badge-info">BİLGİ</span>',
+    long:'<span class="log-badge badge-long">LONG</span>',
+    short:'<span class="log-badge badge-short">SHORT</span>',
+    close:'<span class="log-badge badge-close">KAPAT</span>',
+    info:'<span class="log-badge badge-info">BİLGİ</span>',
   };
-  // Only add new entries
-  const existing = new Set([...el.querySelectorAll('.log-entry')].map(e => e.dataset.ts));
-  const newEntries = logs.filter(l => !existing.has(String(l.ts)));
-  newEntries.forEach(l => {
+
+  // logs = array from server, oldest to newest (or newest to oldest — handle both)
+  // We iterate in original order and prepend, so newest ends up on top
+  const sorted = [...logs].sort((a,b) => a.ts - b.ts);  // oldest first
+  let added = false;
+
+  for (const l of sorted) {
+    const key = `${l.ts}__${l.msg}`;
+    if (_seenLog.has(key)) continue;      // ← skip already-rendered entries
+    _seenLog.add(key);
+
+    const pnlHtml = l.pnl
+      ? `<div class="log-pnl" style="color:${l.pnl>0?'var(--green)':'var(--red)'}">${l.pnl>0?'+':''}${l.pnl.toFixed(2)}$</div>`
+      : '';
+
     const div = document.createElement('div');
-    div.className = 'log-entry'; div.dataset.ts = l.ts;
+    div.className = 'log-entry';
     div.innerHTML = `
       <span class="log-time">${l.time}</span>
-      <div>${badges[l.type] || badges.info}<span style="font-size:11px">${l.msg}</span></div>
-    `;
+      <div>${badges[l.type]||badges.info}<span style="font-size:11px;vertical-align:middle">${l.msg}</span></div>
+      ${pnlHtml}`;
     el.prepend(div);
-  });
-  while (el.children.length > 80) el.lastChild.remove();
+    added = true;
+  }
+
+  while (el.children.length > 120) el.lastChild.remove();
 }
 
-// ─── Chart ────────────────────────────────────────────────────────────────────
-let _chartW = 0;
-const _chartH = 300;
-
+// ── Chart ─────────────────────────────────────────────────────
 function initChart() {
   const canvas = document.getElementById('chart');
-  const dpr = window.devicePixelRatio || 1;
-  // Use parent container width (panel minus padding)
-  const wrap = canvas.closest('.chart-wrap') || canvas.parentElement;
-  const cssW = Math.max(200, wrap.clientWidth - 2);
+  const dpr    = window.devicePixelRatio || 1;
+  const wrap   = canvas.closest('.chart-wrap') || canvas.parentElement;
+  const cssW   = Math.max(200, wrap.clientWidth - 26);
   _chartW = cssW;
   canvas.style.width  = cssW + 'px';
   canvas.style.height = _chartH + 'px';
   canvas.width  = Math.round(cssW * dpr);
   canvas.height = Math.round(_chartH * dpr);
   chartCtx = canvas.getContext('2d');
-  chartCtx.setTransform(dpr, 0, 0, dpr, 0, 0); // reset transform, then scale once
+  chartCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
 function drawChart(candles, price, pos, trend) {
-  // Re-init if canvas size changed or context lost
   const canvas = document.getElementById('chart');
-  if (!chartCtx || canvas.clientWidth !== _chartW) initChart();
+  if (!chartCtx || Math.abs(canvas.clientWidth - _chartW) > 4) initChart();
   if (!chartCtx) return;
 
-  const W = _chartW, H = _chartH;
-  const ctx = chartCtx;
-  ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = '#030810';
-  ctx.fillRect(0, 0, W, H);
+  const W=_chartW, H=_chartH, ctx=chartCtx;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#030810'; ctx.fillRect(0,0,W,H);
 
-  if (!candles || candles.length < 2) {
-    ctx.fillStyle = 'rgba(168,200,232,0.25)';
-    ctx.font = '13px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText('Başlatmak için ▶ BAŞLAT butonuna tıklayın', W/2, H/2);
-    return;
+  if (!candles||candles.length<2) {
+    ctx.fillStyle='rgba(168,200,232,.2)'; ctx.font='13px monospace'; ctx.textAlign='center';
+    ctx.fillText('Başlatmak için ▶ BAŞLAT butonuna tıklayın',W/2,H/2); return;
   }
 
-  const pad = { top: 18, bottom: 24, left: 4, right: 64 };
-  const cw = W - pad.left - pad.right;
-  const ch = H - pad.top - pad.bottom;
-
-  // Price range
-  const allPrices = candles.flatMap(c => [c.h, c.l]);
-  let minP = Math.min(...allPrices), maxP = Math.max(...allPrices);
-  const rng = (maxP - minP) || 1;
-  minP -= rng * 0.07; maxP += rng * 0.07;
-  const toY = p => pad.top + ch * (1 - (p - minP) / (maxP - minP));
+  const pad={top:18,bottom:24,left:4,right:64};
+  const cw=W-pad.left-pad.right, ch=H-pad.top-pad.bottom;
+  const allP=candles.flatMap(c=>[c.h,c.l]);
+  let minP=Math.min(...allP),maxP=Math.max(...allP);
+  const rng=(maxP-minP)||1; minP-=rng*.08; maxP+=rng*.08;
+  const toY=p=>pad.top+ch*(1-(p-minP)/(maxP-minP));
 
   // Grid
-  ctx.strokeStyle = 'rgba(13,32,64,.7)'; ctx.lineWidth = 1;
-  for (let i = 0; i <= 4; i++) {
-    const y = pad.top + (ch / 4) * i;
-    const pv = maxP - ((maxP - minP) / 4) * i;
-    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
-    ctx.fillStyle = 'rgba(42,64,96,.85)'; ctx.font = '9px monospace'; ctx.textAlign = 'left';
-    ctx.fillText(pv.toFixed(0), W - pad.right + 4, y + 3);
+  ctx.strokeStyle='rgba(13,32,64,.7)'; ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const y=pad.top+ch/4*i, pv=maxP-(maxP-minP)/4*i;
+    ctx.beginPath(); ctx.moveTo(pad.left,y); ctx.lineTo(W-pad.right,y); ctx.stroke();
+    ctx.fillStyle='rgba(42,64,96,.85)'; ctx.font='9px monospace'; ctx.textAlign='left';
+    ctx.fillText(pv.toFixed(0),W-pad.right+4,y+3);
   }
 
   // Trend channel
-  if (trend) {
-    const thY = toY(trend.trend_high);
-    const tlY = toY(trend.trend_low);
-    // Fill channel area
-    ctx.fillStyle = 'rgba(0,212,255,0.03)';
-    ctx.fillRect(pad.left, thY, cw, tlY - thY);
-    // Lines
-    ctx.setLineDash([5, 4]); ctx.lineWidth = 1.5;
-    ctx.strokeStyle = 'rgba(255,51,85,.75)';
-    ctx.beginPath(); ctx.moveTo(pad.left, thY); ctx.lineTo(W - pad.right, thY); ctx.stroke();
-    ctx.strokeStyle = 'rgba(0,255,136,.75)';
-    ctx.beginPath(); ctx.moveTo(pad.left, tlY); ctx.lineTo(W - pad.right, tlY); ctx.stroke();
-    ctx.setLineDash([]);
-    // Labels on right
-    ctx.textAlign = 'right';
-    ctx.fillStyle = 'rgba(255,51,85,.9)'; ctx.font = '9px monospace';
-    ctx.fillText('R ' + trend.trend_high.toFixed(0), W - pad.right - 2, thY - 3);
-    ctx.fillStyle = 'rgba(0,255,136,.9)';
-    ctx.fillText('S ' + trend.trend_low.toFixed(0), W - pad.right - 2, tlY + 10);
+  if(trend){
+    const thY=toY(trend.trend_high),tlY=toY(trend.trend_low);
+    ctx.fillStyle='rgba(0,212,255,.03)'; ctx.fillRect(pad.left,thY,cw,tlY-thY);
+    ctx.setLineDash([5,4]); ctx.lineWidth=1.5;
+    ctx.strokeStyle='rgba(255,51,85,.75)'; ctx.beginPath(); ctx.moveTo(pad.left,thY); ctx.lineTo(W-pad.right,thY); ctx.stroke();
+    ctx.strokeStyle='rgba(0,255,136,.75)'; ctx.beginPath(); ctx.moveTo(pad.left,tlY); ctx.lineTo(W-pad.right,tlY); ctx.stroke();
+    ctx.setLineDash([]); ctx.textAlign='right'; ctx.font='9px monospace';
+    ctx.fillStyle='rgba(255,51,85,.9)'; ctx.fillText('R '+trend.trend_high.toFixed(0),W-pad.right-2,thY-3);
+    ctx.fillStyle='rgba(0,255,136,.9)'; ctx.fillText('S '+trend.trend_low.toFixed(0),W-pad.right-2,tlY+10);
   }
 
   // Candles
-  const display = Math.min(candles.length, 80);
-  const start   = candles.length - display;
-  const cndW    = cw / display;
-  const bodyW   = Math.max(1.5, cndW * 0.65);
-
-  for (let i = 0; i < display; i++) {
-    const c   = candles[start + i];
-    const x   = pad.left + (i + 0.5) * cndW;
-    const col = c.c >= c.o ? '#00ff88' : '#ff3355';
-    ctx.strokeStyle = col; ctx.lineWidth = 1;
-    // Wick
-    ctx.beginPath(); ctx.moveTo(x, toY(c.h)); ctx.lineTo(x, toY(c.l)); ctx.stroke();
-    // Body
-    const bTop = toY(Math.max(c.o, c.c));
-    const bBot = toY(Math.min(c.o, c.c));
-    ctx.fillStyle = col;
-    ctx.fillRect(x - bodyW/2, bTop, bodyW, Math.max(1.5, bBot - bTop));
+  const display=Math.min(candles.length,80), start=candles.length-display;
+  const cndW=cw/display, bodyW=Math.max(1.5,cndW*.65);
+  for(let i=0;i<display;i++){
+    const c=candles[start+i], x=pad.left+(i+.5)*cndW, col=c.c>=c.o?'#00ff88':'#ff3355';
+    ctx.strokeStyle=col; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x,toY(c.h)); ctx.lineTo(x,toY(c.l)); ctx.stroke();
+    const bTop=toY(Math.max(c.o,c.c)), bH=Math.max(1.5,toY(Math.min(c.o,c.c))-bTop);
+    ctx.fillStyle=col; ctx.fillRect(x-bodyW/2,bTop,bodyW,bH);
   }
 
-  // Current price tag
-  if (price > 0 && price >= minP && price <= maxP) {
-    const py = toY(price);
-    ctx.strokeStyle = 'rgba(0,212,255,.85)'; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
-    ctx.beginPath(); ctx.moveTo(pad.left, py); ctx.lineTo(W - pad.right, py); ctx.stroke();
+  // Price tag
+  if(price>0&&price>=minP&&price<=maxP){
+    const py=toY(price);
+    ctx.strokeStyle='rgba(0,212,255,.85)'; ctx.lineWidth=1; ctx.setLineDash([3,4]);
+    ctx.beginPath(); ctx.moveTo(pad.left,py); ctx.lineTo(W-pad.right,py); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = '#00d4ff';
-    ctx.fillRect(W - pad.right + 1, py - 8, 60, 14);
-    ctx.fillStyle = '#000918'; ctx.font = 'bold 9px monospace'; ctx.textAlign = 'left';
-    ctx.fillText(price.toFixed(1), W - pad.right + 4, py + 3);
+    ctx.fillStyle='#00d4ff'; ctx.fillRect(W-pad.right+1,py-8,60,14);
+    ctx.fillStyle='#000918'; ctx.font='bold 9px monospace'; ctx.textAlign='left';
+    ctx.fillText(price.toFixed(1),W-pad.right+4,py+3);
   }
 
-  // Entry price tag
-  if (pos && pos.entry_price >= minP && pos.entry_price <= maxP) {
-    const ey  = toY(pos.entry_price);
-    const col = pos.side === 'long' ? '#00ff88' : '#ff3355';
-    ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.setLineDash([6, 3]);
-    ctx.beginPath(); ctx.moveTo(pad.left, ey); ctx.lineTo(W - pad.right, ey); ctx.stroke();
+  // Entry tag
+  if(pos&&pos.entry_price>=minP&&pos.entry_price<=maxP){
+    const ey=toY(pos.entry_price), col=pos.side==='long'?'#00ff88':'#ff3355';
+    ctx.strokeStyle=col; ctx.lineWidth=1.5; ctx.setLineDash([6,3]);
+    ctx.beginPath(); ctx.moveTo(pad.left,ey); ctx.lineTo(W-pad.right,ey); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = col;
-    ctx.fillRect(W - pad.right + 1, ey - 8, 60, 14);
-    ctx.fillStyle = '#000'; ctx.font = 'bold 9px monospace'; ctx.textAlign = 'left';
-    ctx.fillText('ENTRY', W - pad.right + 3, ey + 3);
+    ctx.fillStyle=col; ctx.fillRect(W-pad.right+1,ey-8,60,14);
+    ctx.fillStyle='#000'; ctx.font='bold 9px monospace'; ctx.textAlign='left';
+    ctx.fillText('ENTRY',W-pad.right+3,ey+3);
   }
 }
 
-// ─── Bot controls ─────────────────────────────────────────────────────────────
+// ── Controls ──────────────────────────────────────────────────
+function onModeChange() {
+  const live = document.getElementById('mode').value === 'live';
+  document.getElementById('apiSection').style.display = live  ? 'block' : 'none';
+  document.getElementById('tickRow').style.display    = !live ? 'block' : 'none';
+}
+
 async function startBot() {
+  const mode = document.getElementById('mode').value;
   const body = {
-    symbol: document.getElementById('symbol').value.toUpperCase(),
-    mode: document.getElementById('mode').value,
-    trend_period: parseInt(document.getElementById('trendPeriod').value),
+    symbol:          document.getElementById('symbol').value.toUpperCase(),
+    mode,
+    trend_period:    parseInt(document.getElementById('trendPeriod').value),
     break_threshold: parseFloat(document.getElementById('breakThreshold').value),
     trade_size_usdt: parseFloat(document.getElementById('tradeSize').value),
-    leverage: parseInt(document.getElementById('leverage').value),
-    stop_loss_pct: parseFloat(document.getElementById('stopLoss').value),
-    tick_interval: parseFloat(document.getElementById('tickInterval').value),
+    leverage:        parseInt(document.getElementById('leverage').value),
+    stop_loss_pct:   parseFloat(document.getElementById('stopLoss').value),
+    tick_interval:   parseFloat(document.getElementById('tickInterval').value||'2'),
   };
-  const r = await fetch('/api/start', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-  if (!r.ok) { const e = await r.json(); alert(e.detail); }
+
+  if (mode === 'live') {
+    body.api_key      = document.getElementById('apiKey').value.trim();
+    body.api_secret   = document.getElementById('apiSecret').value.trim();
+    body.account_type = document.getElementById('accountType').value;
+    if (!body.api_key || !body.api_secret) {
+      alert('Live mod için API Key ve Secret gereklidir.');
+      return;
+    }
+  }
+
+  // Reset log on new start
+  _seenLog.clear();
+  document.getElementById('tradeLog').innerHTML = '';
+
+  const r = await fetch('/api/start', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+  });
+  if (!r.ok) { const e=await r.json(); alert(e.detail||'Başlatma hatası'); }
 }
 
 async function stopBot() {
-  const r = await fetch('/api/stop', { method: 'POST' });
-  if (!r.ok) { const e = await r.json(); alert(e.detail); }
+  const r = await fetch('/api/stop',{method:'POST'});
+  if (!r.ok) { const e=await r.json(); alert(e.detail||'Durdurma hatası'); }
 }
 
-document.getElementById('mode').addEventListener('change', function() {
-  document.getElementById('tickRow').style.display = this.value === 'sim' ? 'block' : 'none';
-});
-
-// ─── Init ─────────────────────────────────────────────────────────────────────
+// ── Init ──────────────────────────────────────────────────────
 window.addEventListener('load', () => {
   initChart();
   connectWS();

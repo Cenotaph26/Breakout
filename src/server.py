@@ -85,6 +85,10 @@ class StartRequest(BaseModel):
     stop_loss_pct: float = 0.5      # percent → converted internally
     mode: str = "sim"               # 'sim' | 'live'
     tick_interval: float = 2.0      # sim only: seconds per candle
+    # live mode only
+    api_key: str = ""
+    api_secret: str = ""
+    account_type: str = "USDT_FUTURES"  # SPOT | USDT_FUTURES | COIN_FUTURES
 
 
 @app.post("/api/start")
@@ -93,6 +97,9 @@ async def start_bot(req: StartRequest):
 
     if bot and bot.running:
         raise HTTPException(400, "Bot zaten çalışıyor.")
+
+    if req.mode == "live" and (not req.api_key or not req.api_secret):
+        raise HTTPException(400, "Live mod için API Key ve Secret gereklidir.")
 
     cfg = BotConfig(
         symbol=req.symbol.upper(),
@@ -108,12 +115,12 @@ async def start_bot(req: StartRequest):
     bot.running = True
 
     if req.mode == "live":
-        feed = BinanceFeed(bot)
+        feed = BinanceFeed(bot, api_key=req.api_key, api_secret=req.api_secret, account_type=req.account_type)
     else:
         feed = SimFeed(bot, tick_interval=req.tick_interval)
 
     await feed.start()
-    logger.info(f"Bot başlatıldı — {cfg.symbol} [{req.mode}]")
+    logger.info(f"Bot başlatıldı — {cfg.symbol} [{req.mode}] account={req.account_type}")
     return {"status": "started", "config": cfg.__dict__}
 
 

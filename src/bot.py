@@ -202,12 +202,18 @@ class TrendBreakBot:
         self.position = None
 
     def _log_trade(self, type_: str, msg: str, pnl: float = 0.0):
+        # Use monotonically increasing counter to guarantee unique ts even if
+        # two trades happen within the same millisecond
+        ts = int(time.time() * 1000)
+        if self.trade_log:
+            ts = max(ts, self.trade_log[-1]["ts"] + 1)  # always strictly greater
+
         self.trade_log.append({
             "type": type_,
             "msg": msg,
             "pnl": round(pnl, 4),
             "time": datetime.utcnow().strftime("%H:%M:%S"),
-            "ts": int(time.time() * 1000),
+            "ts": ts,
         })
         if len(self.trade_log) > 200:
             self.trade_log = self.trade_log[-200:]

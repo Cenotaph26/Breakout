@@ -18,13 +18,34 @@ logger = logging.getLogger(__name__)
 
 
 class BinanceFeed:
-    """Live 1-minute kline feed from Binance Futures."""
+    """
+    Live 1-minute kline feed from Binance.
+    account_type: SPOT | USDT_FUTURES | COIN_FUTURES
+    Demo hesap için normal API key + BinanceEnvironment.DEMO kullanılır.
+    """
 
-    WS_BASE = "wss://fstream.binance.com/ws"
+    # Spot public stream
+    WS_SPOT    = "wss://stream.binance.com:9443/ws"
+    # Futures public stream
+    WS_FUTURES = "wss://fstream.binance.com/ws"
 
-    def __init__(self, bot: TrendBreakBot):
-        self.bot = bot
+    def __init__(self, bot: TrendBreakBot,
+                 api_key: str = "",
+                 api_secret: str = "",
+                 account_type: str = "USDT_FUTURES"):
+        self.bot          = bot
+        self.api_key      = api_key
+        self.api_secret   = api_secret
+        self.account_type = account_type.upper()
         self._task: asyncio.Task | None = None
+
+    def _ws_url(self) -> str:
+        symbol = self.bot.config.symbol.lower()
+        # Perpetual futures symbol: BTCUSDT-PERP → btcusdt, BTCUSDT → btcusdt
+        sym = symbol.replace("-perp", "").replace("-", "")
+        if self.account_type in ("USDT_FUTURES", "COIN_FUTURES"):
+            return f"{self.WS_FUTURES}/{sym}@kline_1m"
+        return f"{self.WS_SPOT}/{sym}@kline_1m"
 
     async def start(self):
         self._task = asyncio.create_task(self._run())
@@ -39,20 +60,19 @@ class BinanceFeed:
             self._task = None
 
     async def _run(self):
-        symbol = self.bot.config.symbol.lower()
-        url = f"{self.WS_BASE}/{symbol}@kline_1m"
-        logger.info(f"Connecting to Binance: {url}")
+        url = self._ws_url()
+        logger.info(f"Binance bağlanıyor: {url} | account={self.account_type}")
 
         while self.bot.running:
             try:
                 async with websockets.connect(url, ping_interval=20) as ws:
-                    logger.info("Binance WS connected.")
+                    logger.info("Binance WS bağlandı.")
                     async for raw in ws:
                         if not self.bot.running:
                             break
                         data = json.loads(raw)
                         k = data.get("k", {})
-                        if k.get("x"):   # candle closed
+                        if k.get("x"):   # kapalı mum
                             candle = Candle(
                                 open=float(k["o"]),
                                 high=float(k["h"]),
@@ -65,7 +85,7 @@ class BinanceFeed:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                logger.warning(f"Binance WS error: {exc}. Reconnecting in 5s...")
+                logger.warning(f"Binance WS hatası: {exc}. 5sn sonra yeniden bağlanıyor...")
                 await asyncio.sleep(5)
 
 

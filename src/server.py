@@ -37,7 +37,7 @@ def load_env():
         "demo":      _e("BINANCE_DEMO","true").lower()!="false",
         "symbol":    _e("SYMBOL","BTCUSDT"),
         "mode":      _e("MODE","live"),
-        "trend_period":    _ei("TREND_PERIOD", 5),
+        "trend_period":    _ei("TREND_PERIOD", 4),
         "break_threshold": _ef("BREAK_THRESHOLD", 0.05),
         "trade_size_usdt": _ef("TRADE_SIZE", 15.0),
         "leverage":        _ei("LEVERAGE", 3),
@@ -55,7 +55,7 @@ async def start_bot_from_env():
 
     if mode == "live" and (not raw["api_key"] or not raw["api_secret"]):
         startup_error = "BINANCE_API_KEY veya BINANCE_API_SECRET eksik!"
-        logger.warning(f"⚠ {startup_error} → SIM moduna geçildi")
+        logger.warning(f"{startup_error} → SIM moduna geçildi")
         mode = "sim"
 
     def mk_cfg(m):
@@ -70,18 +70,18 @@ async def start_bot_from_env():
         )
 
     cfg = mk_cfg(mode)
-    exc = None; min_qty = 0.001; precision = 3
+    exc = None
 
     if mode == "live":
         exc = BinanceExecutor(raw["api_key"], raw["api_secret"], demo=raw["demo"])
         try:
             await exc.test_connection()
-            await exc.load_symbol_filters(cfg.symbol)   # tickSize + stepSize
+            await exc.load_symbol_filters(cfg.symbol)
             binance_ok = True
-            logger.info(f"✅ Binance OK | qty_step={exc._qty_step} price_step={exc._price_step}")
+            logger.info(f"Binance OK | qty_step={exc._qty_step} price_step={exc._price_step}")
         except Exception as e:
             startup_error = f"Binance hatası: {str(e)[:150]}"
-            logger.error(f"❌ {startup_error}")
+            logger.error(startup_error)
             await exc.close(); exc = None
             mode = "sim"; cfg = mk_cfg("sim")
 
@@ -89,11 +89,9 @@ async def start_bot_from_env():
     bot.running    = True
     executor_inst  = exc
 
-    # Geçmiş mumları yükle
     if mode == "live" and exc:
         try:
             hist = await exc.get_recent_klines(cfg.symbol, limit=80)
-            logger.info(f"Kline yanıtı: {len(hist)} mum")
             for k in hist:
                 bot.candles.append(Candle(
                     open=k["open"], high=k["high"], low=k["low"],
@@ -102,13 +100,13 @@ async def start_bot_from_env():
             if hist:
                 bot.current_price = hist[-1]["close"]
                 bot.current_trend = bot.analyze_trend()
-                logger.info(f"📊 {len(hist)} mum yüklendi | fiyat={bot.current_price:.2f} | trend={bot.current_trend.direction if bot.current_trend else 'yok'}")
+                logger.info(f"{len(hist)} mum yüklendi | fiyat={bot.current_price:.2f}")
         except Exception as e:
             logger.error(f"Kline yükleme hatası: {e}")
 
     feed = BinanceFeed(bot, demo=raw["demo"]) if mode=="live" else SimFeed(bot, tick_interval=raw["tick_interval"])
     await feed.start()
-    logger.info(f"🚀 Bot aktif | mod={mode} | lev={cfg.leverage}x | size={cfg.trade_size_usdt}$")
+    logger.info(f"Bot aktif | mod={mode} | lev={cfg.leverage}x | size={cfg.trade_size_usdt}$")
 
 
 async def stop_bot_internal():
@@ -127,7 +125,6 @@ def _state(full: bool = True):
     s["startup_error"] = startup_error
     s["binance_ok"]    = binance_ok
     if not full:
-        # Sadece anlık değişenler — candles ve trade_log çıkar
         s.pop("candles",    None)
         s.pop("trade_log",  None)
     return s
@@ -140,7 +137,6 @@ async def broadcast_loop():
         await asyncio.sleep(1)
         if not ws_clients: continue
         _tick += 1
-        # Her 5 saniyede tam state (candles dahil), arası sadece fiyat/pozisyon
         full    = (_tick % 5 == 0)
         payload = json.dumps(_state(full=full))
         dead = set()
@@ -194,22 +190,11 @@ async def api_restart():
 
 @app.post("/api/config")
 async def api_update_config(body: dict):
-    """
-    Botu durdurmadan ayarları güncelle ve yeniden başlat.
-    Body: { symbol, trend_period, break_threshold, trade_size_usdt,
-            leverage, stop_loss_pct, mode, demo }
-    """
-    # Env'e yaz (bu process için geçerli, Railway Variables'ı değiştirmez)
     mapping = {
-        "symbol":          "SYMBOL",
-        "trend_period":    "TREND_PERIOD",
-        "break_threshold": "BREAK_THRESHOLD",
-        "trade_size_usdt": "TRADE_SIZE",
-        "leverage":        "LEVERAGE",
-        "stop_loss_pct":   "STOP_LOSS_PCT",
-        "mode":            "MODE",
-        "demo":            "BINANCE_DEMO",
-        "tick_interval":   "TICK_INTERVAL",
+        "symbol": "SYMBOL", "trend_period": "TREND_PERIOD",
+        "break_threshold": "BREAK_THRESHOLD", "trade_size_usdt": "TRADE_SIZE",
+        "leverage": "LEVERAGE", "stop_loss_pct": "STOP_LOSS_PCT",
+        "mode": "MODE", "demo": "BINANCE_DEMO", "tick_interval": "TICK_INTERVAL",
     }
     for key, env_key in mapping.items():
         if key in body:
@@ -244,7 +229,7 @@ async def ws_endpoint(websocket: WebSocket):
             await asyncio.sleep(15)
             if not alive: break
             try:
-                await websocket.send_text(chr(123)+chr(34)+"ping"+chr(34)+":true}")
+                await websocket.send_text('{"ping":true}')
             except Exception:
                 alive = False
                 break

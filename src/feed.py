@@ -1,8 +1,7 @@
 """
-Price Feed
-BinanceFeed: Testnet/Live USDT-M Futures
-- kline_1m stream  → kapanan mumda strateji tetikler
-- miniTicker stream → her ~1s anlık fiyat günceller (grafik canlı kalır)
+Price Feed — Binance WS
+- kline_1m: mum kapanışında strateji tetikler
+- miniTicker: anlık fiyat (sadece SL kontrolü)
 """
 
 import asyncio
@@ -17,8 +16,6 @@ from src.bot import Candle, TrendBreakBot
 
 logger = logging.getLogger(__name__)
 
-# Testnet WS:  wss://fstream.binancefuture.com/ws  (REST ile aynı host değil!)
-# Live WS:     wss://fstream.binance.com/ws
 TESTNET_WS = "wss://fstream.binancefuture.com/ws"
 LIVE_WS    = "wss://fstream.binance.com/ws"
 
@@ -52,19 +49,16 @@ class BinanceFeed:
         while self.bot.running:
             try:
                 async with websockets.connect(
-                    url,
-                    ping_interval=15,   # her 15s Binance'e ping
-                    ping_timeout=10,
-                    close_timeout=5,
+                    url, ping_interval=15, ping_timeout=10, close_timeout=5,
                 ) as ws:
-                    logger.info("✅ Kline stream bağlandı")
+                    logger.info("Kline stream bağlandı")
                     async for raw in ws:
                         if not self.bot.running: break
                         try:
                             d = json.loads(raw)
                             k = d.get("k", {})
                             self.bot.current_price = float(k.get("c", self.bot.current_price))
-                            if k.get("x"):
+                            if k.get("x"):  # mum kapandı
                                 candle = Candle(
                                     open=float(k["o"]), high=float(k["h"]),
                                     low=float(k["l"]),  close=float(k["c"]),
@@ -75,7 +69,7 @@ class BinanceFeed:
                             logger.debug(f"Kline parse: {ex}")
             except asyncio.CancelledError: raise
             except Exception as e:
-                logger.warning(f"Kline stream hata: {e} — 3s")
+                logger.warning(f"Kline stream hata: {e} — 3s bekle")
                 await asyncio.sleep(3)
 
     async def _ticker_stream(self):
@@ -85,25 +79,20 @@ class BinanceFeed:
         while self.bot.running:
             try:
                 async with websockets.connect(
-                    url,
-                    ping_interval=15,
-                    ping_timeout=10,
-                    close_timeout=5,
+                    url, ping_interval=15, ping_timeout=10, close_timeout=5,
                 ) as ws:
-                    logger.info("✅ Ticker stream bağlandı")
+                    logger.info("Ticker stream bağlandı")
                     async for raw in ws:
                         if not self.bot.running: break
                         try:
                             d = json.loads(raw)
                             if "c" in d:
                                 price = float(d["c"])
-                                self.bot.current_price = price
-                                # Gerçek zamanlı breakout + stop-loss kontrolü
-                                asyncio.create_task(self.bot.on_price_tick(price))
+                                await self.bot.on_price_tick(price)
                         except: pass
             except asyncio.CancelledError: raise
             except Exception as e:
-                logger.warning(f"Ticker stream hata: {e} — 3s")
+                logger.warning(f"Ticker stream hata: {e} — 3s bekle")
                 await asyncio.sleep(3)
 
 

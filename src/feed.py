@@ -96,7 +96,10 @@ class BinanceFeed:
                         try:
                             d = json.loads(raw)
                             if "c" in d:
-                                self.bot.current_price = float(d["c"])
+                                price = float(d["c"])
+                                self.bot.current_price = price
+                                # Gerçek zamanlı breakout + stop-loss kontrolü
+                                asyncio.create_task(self.bot.on_price_tick(price))
                         except: pass
             except asyncio.CancelledError: raise
             except Exception as e:

@@ -197,17 +197,27 @@ async def ws_endpoint(websocket: WebSocket):
     await websocket.accept()
     ws_clients.add(websocket)
     logger.info(f"WS bağlandı | toplam={len(ws_clients)}")
+
+    async def _drain():
+        """Gelen tüm mesajları oku (bağlantıyı canlı tutar)."""
+        try:
+            while True:
+                await websocket.receive_text()
+        except Exception:
+            pass
+
+    drain = asyncio.create_task(_drain())
     try:
-        await websocket.send_text(json.dumps(_state()))
-        while True:
+        await websocket.send_text(json.dumps(_state(full=True)))
+        while not drain.done():
+            await asyncio.sleep(20)
             try:
-                await asyncio.wait_for(websocket.receive_text(), timeout=25)
-            except asyncio.TimeoutError:
                 await websocket.send_text('{"ping":true}')
-            except WebSocketDisconnect:
+            except Exception:
                 break
-    except (WebSocketDisconnect, Exception):
+    except Exception:
         pass
     finally:
+        drain.cancel()
         ws_clients.discard(websocket)
         logger.info(f"WS ayrıldı | toplam={len(ws_clients)}")

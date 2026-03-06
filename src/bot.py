@@ -284,26 +284,54 @@ class TrendBreakBot:
             if len(self.candles) > self.config.max_candles:
                 self.candles.pop(0)
 
-            self.current_price  = candle.close
-            trend               = self.analyze_trend()
-            self.current_trend  = trend
+            self.current_price = candle.close
+            trend              = self.analyze_trend()
+            self.current_trend = trend
 
             if not trend:
                 return
 
-            # Exit check (her mumda)
             if self.position:
                 reason = self.check_exit(trend, candle.close)
                 if reason:
                     await self.close_position(candle.close, reason)
                     return
 
-            # Entry check — her trend yönünde breakout ara
             if not self.position:
                 signal = self.detect_breakout(trend, candle.close)
                 if signal:
-                    logger.info(f"🎯 Breakout sinyali: {signal} @ {candle.close:.2f} | trend={trend.direction} | high={trend.trend_high:.2f} low={trend.trend_low:.2f}")
+                    logger.info(f"🎯 Candle breakout: {signal} @ {candle.close:.2f} | high={trend.trend_high:.2f} low={trend.trend_low:.2f}")
                     await self.open_position(signal, candle.close)
+
+    async def on_price_tick(self, price: float):
+        """
+        Gerçek zamanlı fiyat güncellemesi — mum kapanmadan breakout tespiti.
+        Ticker stream'den her ~300ms çağrılır.
+        """
+        if not self.running or self._lock.locked():
+            return
+        self.current_price = price
+        trend = self.current_trend
+        if not trend:
+            return
+
+        # Stop loss gerçek zamanlı kontrol
+        if self.position:
+            if self.position.side == "long"  and price <= self.position.stop_loss:
+                async with self._lock:
+                    await self.close_position(price, "STOP LOSS (RT)")
+            elif self.position.side == "short" and price >= self.position.stop_loss:
+                async with self._lock:
+                    await self.close_position(price, "STOP LOSS (RT)")
+            return
+
+        # Breakout gerçek zamanlı
+        signal = self.detect_breakout(trend, price)
+        if signal:
+            async with self._lock:
+                if not self.position:  # lock alındıktan sonra tekrar kontrol
+                    logger.info(f"🎯 RT breakout: {signal} @ {price:.2f} | high={trend.trend_high:.2f} low={trend.trend_low:.2f}")
+                    await self.open_position(signal, price)
 
     # ── State snapshot ────────────────────────────────────────────────────────
 

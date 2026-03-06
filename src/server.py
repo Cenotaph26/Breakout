@@ -191,6 +191,35 @@ async def api_restart():
     await stop_bot_internal(); await asyncio.sleep(1)
     await start_bot_from_env(); return {"status": "restarted"}
 
+
+@app.post("/api/config")
+async def api_update_config(body: dict):
+    """
+    Botu durdurmadan ayarları güncelle ve yeniden başlat.
+    Body: { symbol, trend_period, break_threshold, trade_size_usdt,
+            leverage, stop_loss_pct, mode, demo }
+    """
+    # Env'e yaz (bu process için geçerli, Railway Variables'ı değiştirmez)
+    mapping = {
+        "symbol":          "SYMBOL",
+        "trend_period":    "TREND_PERIOD",
+        "break_threshold": "BREAK_THRESHOLD",
+        "trade_size_usdt": "TRADE_SIZE",
+        "leverage":        "LEVERAGE",
+        "stop_loss_pct":   "STOP_LOSS_PCT",
+        "mode":            "MODE",
+        "demo":            "BINANCE_DEMO",
+        "tick_interval":   "TICK_INTERVAL",
+    }
+    for key, env_key in mapping.items():
+        if key in body:
+            os.environ[env_key] = str(body[key]).lower()
+    logger.info(f"Config güncellendi: {body}")
+    await stop_bot_internal()
+    await asyncio.sleep(0.5)
+    await start_bot_from_env()
+    return {"status": "ok", "applied": body}
+
 # ── WebSocket ─────────────────────────────────────────────────
 @app.websocket("/ws")
 async def ws_endpoint(websocket: WebSocket):

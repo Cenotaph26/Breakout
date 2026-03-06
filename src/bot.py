@@ -163,21 +163,19 @@ class TrendBreakBot:
 
     def _calc_quantity(self, price: float) -> float:
         """Notional değeri base asset miktarına çevir, stepSize'a göre yuvarla."""
-        if self.executor:
-            step = self.executor._qty_step
-        else:
-            step = self._min_qty
+        step = self.executor._qty_step if self.executor else self._min_qty
 
         notional = self.config.trade_size_usdt * self.config.leverage
-        # Binance testnet minimum notional = 100 USDT
         MIN_NOTIONAL = 100.0
         if notional < MIN_NOTIONAL:
             notional = MIN_NOTIONAL
-            logger.warning(f"Notional {self.config.trade_size_usdt * self.config.leverage} < {MIN_NOTIONAL} USDT → {MIN_NOTIONAL} USDT'ye yükseltildi")
+            logger.warning(f"Notional {self.config.trade_size_usdt * self.config.leverage} < {MIN_NOTIONAL} → {MIN_NOTIONAL} USDT")
 
         qty = notional / price
-        qty = math.floor(qty / step) * step
-        return max(step, round(qty, 8))
+        # CEIL (yukarı yuvarla) → notional her zaman minimum karşılar
+        qty_rounded = math.ceil(qty / step) * step
+        prec = self.executor._qty_prec if self.executor else 3
+        return round(qty_rounded, prec)
 
     # ── Order execution (live or simulated) ──────────────────────────────────
 

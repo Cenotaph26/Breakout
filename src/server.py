@@ -1,6 +1,5 @@
 """
 TrendBreak Bot — FastAPI Server
-Railway Variables'dan config okur, başlayınca otomatik çalışır.
 """
 
 import asyncio
@@ -22,127 +21,116 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ── Global state ──────────────────────────────────────────────────────────────
+# ── Global ─────────────────────────────────────────────────────
 bot:            TrendBreakBot | None = None
 feed:           BinanceFeed | SimFeed | None = None
 executor_inst:  BinanceExecutor | None = None
 ws_clients:     set[WebSocket] = set()
 broadcast_task: asyncio.Task | None = None
 
+# Startup'ta oluşan hata mesajını dashboard'a iletmek için
+startup_error:  str = ""
+binance_ok:     bool = False
 
-# ── Config from environment ───────────────────────────────────────────────────
 
-def _env(key: str, default: str = "") -> str:
+# ── Env helpers ────────────────────────────────────────────────
+
+def _env(key, default=""):
     return os.environ.get(key, default).strip()
 
-def _env_float(key: str, default: float) -> float:
-    try:
-        return float(os.environ.get(key, default))
-    except (ValueError, TypeError):
-        return default
+def _env_float(key, default):
+    try:    return float(os.environ.get(key, default))
+    except: return default
 
-def _env_int(key: str, default: int) -> int:
-    try:
-        return int(os.environ.get(key, default))
-    except (ValueError, TypeError):
-        return default
+def _env_int(key, default):
+    try:    return int(os.environ.get(key, default))
+    except: return default
 
-
-def load_config_from_env() -> dict:
-    """Railway Variables'dan bot ayarlarını oku."""
+def load_env():
     return {
         "api_key":         _env("BINANCE_API_KEY"),
         "api_secret":      _env("BINANCE_API_SECRET"),
         "demo":            _env("BINANCE_DEMO", "true").lower() != "false",
         "symbol":          _env("SYMBOL", "BTCUSDT"),
-        "mode":            _env("MODE", "live"),     # 'live' | 'sim'
+        "mode":            _env("MODE", "live"),
         "trend_period":    _env_int("TREND_PERIOD", 5),
-        "break_threshold": _env_float("BREAK_THRESHOLD", 0.05),   # %
+        "break_threshold": _env_float("BREAK_THRESHOLD", 0.05),
         "trade_size_usdt": _env_float("TRADE_SIZE", 15.0),
         "leverage":        _env_int("LEVERAGE", 3),
-        "stop_loss_pct":   _env_float("STOP_LOSS_PCT", 0.5),      # %
-        "tick_interval":   _env_float("TICK_INTERVAL", 2.0),      # sim only
+        "stop_loss_pct":   _env_float("STOP_LOSS_PCT", 0.5),
+        "tick_interval":   _env_float("TICK_INTERVAL", 2.0),
     }
 
 
-# ── Bot lifecycle ─────────────────────────────────────────────────────────────
+# ── Bot lifecycle ──────────────────────────────────────────────
 
 async def start_bot_from_env():
-    """Uygulama başlarken env var'lardan botu otomatik başlat."""
-    global bot, feed, executor_inst
+    global bot, feed, executor_inst, startup_error, binance_ok
 
-    cfg_raw = load_config_from_env()
-    mode    = cfg_raw["mode"]
+    startup_error = ""
+    binance_ok    = False
+    raw  = load_env()
+    mode = raw["mode"]
 
-    if mode == "live" and (not cfg_raw["api_key"] or not cfg_raw["api_secret"]):
-        logger.warning("⚠  BINANCE_API_KEY / BINANCE_API_SECRET eksik — simülasyon modunda başlatılıyor.")
+    # API key kontrol
+    if mode == "live" and (not raw["api_key"] or not raw["api_secret"]):
+        startup_error = "BINANCE_API_KEY veya BINANCE_API_SECRET Railway Variables'da eksik!"
+        logger.warning(f"⚠ {startup_error} → Simülasyon moduna geçildi.")
         mode = "sim"
 
-    cfg = BotConfig(
-        symbol          = cfg_raw["symbol"].upper(),
-        trend_period    = cfg_raw["trend_period"],
-        break_threshold = cfg_raw["break_threshold"] / 100,
-        trade_size_usdt = cfg_raw["trade_size_usdt"],
-        leverage        = cfg_raw["leverage"],
-        stop_loss_pct   = cfg_raw["stop_loss_pct"] / 100,
-        mode            = mode,
-    )
+    def make_cfg(m):
+        return BotConfig(
+            symbol          = raw["symbol"].upper(),
+            trend_period    = raw["trend_period"],
+            break_threshold = raw["break_threshold"] / 100,
+            trade_size_usdt = raw["trade_size_usdt"],
+            leverage        = raw["leverage"],
+            stop_loss_pct   = raw["stop_loss_pct"] / 100,
+            mode            = m,
+        )
 
-    # Executor oluştur (sadece live modda)
+    cfg = make_cfg(mode)
+
     exc       = None
     min_qty   = 0.001
     precision = 3
 
     if mode == "live":
         exc = BinanceExecutor(
-            api_key    = cfg_raw["api_key"],
-            api_secret = cfg_raw["api_secret"],
-            demo       = cfg_raw["demo"],
+            api_key    = raw["api_key"],
+            api_secret = raw["api_secret"],
+            demo       = raw["demo"],
         )
         try:
-            # 1. Zaman senkronizasyonu — 401 hatasının ana nedeni
             await exc.sync_time()
-
-            # 2. Bağlantı + API key doğrulama
             await exc.test_connection()
-
-            # 3. Sembol bilgilerini al
             min_qty   = await exc.get_min_qty(cfg.symbol)
             precision = await exc.get_qty_precision(cfg.symbol)
-            logger.info(f"Sembol: {cfg.symbol} | min_qty={min_qty} | precision={precision}")
-
+            binance_ok = True
+            logger.info(f"✅ Binance OK | {cfg.symbol} min_qty={min_qty} precision={precision}")
         except Exception as e:
-            logger.error(f"❌ Binance bağlantı hatası: {e}")
-            logger.warning("Simülasyon moduna geçiliyor...")
+            err = str(e)
+            # Sadece ilk 120 karakteri al — URL/body kalabalık log yaratır
+            startup_error = f"Binance bağlantı hatası: {err[:120]}"
+            logger.error(f"❌ {startup_error}")
             await exc.close()
             exc  = None
             mode = "sim"
-            cfg  = BotConfig(
-                symbol          = cfg_raw["symbol"].upper(),
-                trend_period    = cfg_raw["trend_period"],
-                break_threshold = cfg_raw["break_threshold"] / 100,
-                trade_size_usdt = cfg_raw["trade_size_usdt"],
-                leverage        = cfg_raw["leverage"],
-                stop_loss_pct   = cfg_raw["stop_loss_pct"] / 100,
-                mode            = "sim",
-            )
+            cfg  = make_cfg("sim")
 
-    bot             = TrendBreakBot(cfg, executor=exc)
-    bot._min_qty    = min_qty
-    bot._precision  = precision
-    bot.running     = True
-    executor_inst   = exc
+    bot            = TrendBreakBot(cfg, executor=exc)
+    bot._min_qty   = min_qty
+    bot._precision = precision
+    bot.running    = True
+    executor_inst  = exc
 
-    if mode == "live":
-        feed = BinanceFeed(bot)
-    else:
-        feed = SimFeed(bot, tick_interval=cfg_raw["tick_interval"])
-
+    feed = BinanceFeed(bot) if mode == "live" else SimFeed(bot, tick_interval=raw["tick_interval"])
     await feed.start()
+
     logger.info(
         f"🚀 Bot başlatıldı | {cfg.symbol} | mod={mode} | "
-        f"kaldıraç={cfg.leverage}x | işlem={cfg.trade_size_usdt}$ | "
-        f"demo={cfg_raw.get('demo', True)}"
+        f"lev={cfg.leverage}x | size={cfg.trade_size_usdt}$ | "
+        f"demo={raw['demo']} | binance_ok={binance_ok}"
     )
 
 
@@ -162,39 +150,43 @@ async def stop_bot_internal():
     logger.info("Bot durduruldu.")
 
 
-# ── Broadcast ─────────────────────────────────────────────────────────────────
+# ── Broadcast ──────────────────────────────────────────────────
+
+def _make_state():
+    state = bot.get_state() if bot else {"running": False}
+    state["startup_error"] = startup_error
+    state["binance_ok"]    = binance_ok
+    return state
 
 async def broadcast_loop():
     while True:
         await asyncio.sleep(1)
-        if not bot or not ws_clients:
+        if not ws_clients:
             continue
-        state = json.dumps(bot.get_state())
-        dead  = set()
+        payload = json.dumps(_make_state())
+        dead = set()
         for ws in list(ws_clients):
             try:
-                await ws.send_text(state)
+                await ws.send_text(payload)
             except Exception:
                 dead.add(ws)
         ws_clients -= dead
 
 
-# ── Lifespan ──────────────────────────────────────────────────────────────────
+# ── Lifespan ───────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global broadcast_task
     broadcast_task = asyncio.create_task(broadcast_loop())
-    # Auto-start
     await start_bot_from_env()
     yield
-    # Shutdown
     await stop_bot_internal()
     if broadcast_task:
         broadcast_task.cancel()
 
 
-# ── App ───────────────────────────────────────────────────────────────────────
+# ── App ────────────────────────────────────────────────────────
 
 app = FastAPI(title="TrendBreak Bot", lifespan=lifespan)
 
@@ -204,32 +196,29 @@ async def dashboard():
     with open("templates/index.html", encoding="utf-8") as f:
         return f.read()
 
-
 @app.get("/api/health")
 async def health():
-    return {"ok": True, "running": bool(bot and bot.running), "mode": bot.config.mode if bot else None}
-
+    return {
+        "ok":          True,
+        "running":     bool(bot and bot.running),
+        "mode":        bot.config.mode if bot else None,
+        "binance_ok":  binance_ok,
+        "error":       startup_error or None,
+    }
 
 @app.get("/api/state")
-async def get_state():
-    if not bot:
-        return {"running": False}
-    return bot.get_state()
-
+async def get_state_api():
+    return _make_state()
 
 @app.get("/api/balance")
 async def get_balance():
-    """Testnet USDT bakiyesi."""
     if not executor_inst:
         return {"balance": None, "error": "Live mod aktif değil"}
     try:
         bal = await executor_inst.get_balance()
         return {"balance": round(bal, 2)}
     except Exception as e:
-        return {"balance": None, "error": str(e)}
-
-
-# ── Manual controls (dashboard için) ─────────────────────────────────────────
+        return {"balance": None, "error": str(e)[:80]}
 
 @app.post("/api/stop")
 async def api_stop():
@@ -238,29 +227,41 @@ async def api_stop():
     await stop_bot_internal()
     return {"status": "stopped"}
 
-
 @app.post("/api/restart")
 async def api_restart():
-    """Botu durdurup env var'larla yeniden başlat."""
     await stop_bot_internal()
     await asyncio.sleep(1)
     await start_bot_from_env()
     return {"status": "restarted"}
 
 
-# ── WebSocket ─────────────────────────────────────────────────────────────────
+# ── WebSocket ──────────────────────────────────────────────────
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def ws_endpoint(websocket: WebSocket):
     await websocket.accept()
     ws_clients.add(websocket)
-    logger.info(f"WS bağlandı. Toplam: {len(ws_clients)}")
+    logger.info(f"WS bağlandı | toplam={len(ws_clients)}")
     try:
-        if bot:
-            await websocket.send_text(json.dumps(bot.get_state()))
+        # İlk state'i hemen gönder
+        await websocket.send_text(json.dumps(_make_state()))
+
+        # ── Keep-alive: her 20s ping, mesaj gelirse yoksay ──────────
+        # receive_text() blocking olduğundan asyncio.wait kullanıyoruz
         while True:
-            await websocket.receive_text()
+            try:
+                # 20 saniye bekle; herhangi bir mesaj gelse de devam et
+                await asyncio.wait_for(websocket.receive_text(), timeout=20)
+            except asyncio.TimeoutError:
+                # Timeout → ping gönder (tarayıcı/proxy bağlantıyı kesmemesi için)
+                await websocket.send_text(json.dumps({"ping": True}))
+            except WebSocketDisconnect:
+                break
+
     except WebSocketDisconnect:
         pass
+    except Exception as e:
+        logger.debug(f"WS beklenmeyen hata: {e}")
     finally:
         ws_clients.discard(websocket)
+        logger.info(f"WS ayrıldı | toplam={len(ws_clients)}")

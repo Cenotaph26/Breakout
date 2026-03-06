@@ -167,7 +167,15 @@ class TrendBreakBot:
             step = self.executor._qty_step
         else:
             step = self._min_qty
-        qty = (self.config.trade_size_usdt * self.config.leverage) / price
+
+        notional = self.config.trade_size_usdt * self.config.leverage
+        # Binance testnet minimum notional = 100 USDT
+        MIN_NOTIONAL = 100.0
+        if notional < MIN_NOTIONAL:
+            notional = MIN_NOTIONAL
+            logger.warning(f"Notional {self.config.trade_size_usdt * self.config.leverage} < {MIN_NOTIONAL} USDT → {MIN_NOTIONAL} USDT'ye yükseltildi")
+
+        qty = notional / price
         qty = math.floor(qty / step) * step
         return max(step, round(qty, 8))
 

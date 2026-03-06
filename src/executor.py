@@ -157,9 +157,10 @@ class BinanceExecutor:
         try:
             await self._post("/fapi/v1/marginType",
                 {"symbol": symbol.upper(), "marginType": margin_type})
-        except httpx.HTTPStatusError as e:
-            if "-4046" not in str(e):
-                logger.debug(f"marginType: {e}")
+            logger.info(f"MarginType: {symbol} → {margin_type}")
+        except Exception as e:
+            # -4046: already set, -4048: cannot change with open position → ignore all
+            logger.debug(f"marginType (ignored): {e}")
 
     # ── Historical klines ──────────────────────────────────────
     async def get_recent_klines(self, symbol: str, limit: int = 80) -> list[dict]:

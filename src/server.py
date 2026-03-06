@@ -89,27 +89,49 @@ async def start_bot_from_env():
     )
 
     # Executor oluştur (sadece live modda)
-    exc = None
+    exc       = None
+    min_qty   = 0.001
+    precision = 3
+
     if mode == "live":
         exc = BinanceExecutor(
             api_key    = cfg_raw["api_key"],
             api_secret = cfg_raw["api_secret"],
             demo       = cfg_raw["demo"],
         )
-        # Exchange'den min lot size al
         try:
-            min_qty = await exc.get_min_qty(cfg.symbol)
-            logger.info(f"Min qty for {cfg.symbol}: {min_qty}")
-        except Exception as e:
-            logger.warning(f"Min qty alınamadı: {e} — varsayılan 0.001 kullanılıyor")
-            min_qty = 0.001
-    else:
-        min_qty = 0.001
+            # 1. Zaman senkronizasyonu — 401 hatasının ana nedeni
+            await exc.sync_time()
 
-    bot          = TrendBreakBot(cfg, executor=exc)
-    bot._min_qty = min_qty
-    bot.running  = True
-    executor_inst = exc
+            # 2. Bağlantı + API key doğrulama
+            await exc.test_connection()
+
+            # 3. Sembol bilgilerini al
+            min_qty   = await exc.get_min_qty(cfg.symbol)
+            precision = await exc.get_qty_precision(cfg.symbol)
+            logger.info(f"Sembol: {cfg.symbol} | min_qty={min_qty} | precision={precision}")
+
+        except Exception as e:
+            logger.error(f"❌ Binance bağlantı hatası: {e}")
+            logger.warning("Simülasyon moduna geçiliyor...")
+            await exc.close()
+            exc  = None
+            mode = "sim"
+            cfg  = BotConfig(
+                symbol          = cfg_raw["symbol"].upper(),
+                trend_period    = cfg_raw["trend_period"],
+                break_threshold = cfg_raw["break_threshold"] / 100,
+                trade_size_usdt = cfg_raw["trade_size_usdt"],
+                leverage        = cfg_raw["leverage"],
+                stop_loss_pct   = cfg_raw["stop_loss_pct"] / 100,
+                mode            = "sim",
+            )
+
+    bot             = TrendBreakBot(cfg, executor=exc)
+    bot._min_qty    = min_qty
+    bot._precision  = precision
+    bot.running     = True
+    executor_inst   = exc
 
     if mode == "live":
         feed = BinanceFeed(bot)
@@ -193,6 +215,18 @@ async def get_state():
     if not bot:
         return {"running": False}
     return bot.get_state()
+
+
+@app.get("/api/balance")
+async def get_balance():
+    """Testnet USDT bakiyesi."""
+    if not executor_inst:
+        return {"balance": None, "error": "Live mod aktif değil"}
+    try:
+        bal = await executor_inst.get_balance()
+        return {"balance": round(bal, 2)}
+    except Exception as e:
+        return {"balance": None, "error": str(e)}
 
 
 # ── Manual controls (dashboard için) ─────────────────────────────────────────

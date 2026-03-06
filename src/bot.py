@@ -89,7 +89,7 @@ class BotConfig:
 class TrendBreakBot:
     def __init__(self, config: BotConfig, executor=None):
         self.config   = config
-        self.executor = executor          # BinanceExecutor | None (sim mode)
+        self.executor = executor
         self.candles: list[Candle] = []
         self.position: Optional[Position] = None
         self.stats    = BotStats(start_time=datetime.utcnow().isoformat())
@@ -97,8 +97,9 @@ class TrendBreakBot:
         self.current_price = 0.0
         self.trade_log: list[dict] = []
         self.current_trend: Optional[TrendAnalysis] = None
-        self._lock    = asyncio.Lock()
-        self._min_qty = 0.001           # updated from exchange on start
+        self._lock     = asyncio.Lock()
+        self._min_qty  = 0.001
+        self._precision = 3      # qty ondalık basamak
 
     # ── Trend analysis ────────────────────────────────────────────────────────
 
@@ -170,22 +171,27 @@ class TrendBreakBot:
 
         if self.executor and cfg.mode == "live":
             try:
-                # 1. Kaldıraç ayarla
+                # 1. Kaldıraç + marjin modu
                 await self.executor.set_leverage(cfg.symbol, cfg.leverage)
                 await self.executor.set_margin_type(cfg.symbol, "ISOLATED")
 
                 # 2. Market giriş emri
                 order_side = "BUY" if side == "long" else "SELL"
-                result     = await self.executor.market_order(cfg.symbol, order_side, quantity)
+                result     = await self.executor.market_order(
+                    cfg.symbol, order_side, quantity, self._precision
+                )
                 order_id   = result.get("orderId", 0)
                 # Gerçek dolu fiyatı al
-                if result.get("avgPrice") and float(result["avgPrice"]) > 0:
-                    price = float(result["avgPrice"])
+                avg = float(result.get("avgPrice") or 0)
+                if avg > 0:
+                    price    = avg
                     sl_price = price * (1 - cfg.stop_loss_pct) if side == "long" else price * (1 + cfg.stop_loss_pct)
 
                 # 3. Stop-loss emri
                 sl_side   = "SELL" if side == "long" else "BUY"
-                sl_result = await self.executor.stop_market_order(cfg.symbol, sl_side, quantity, sl_price)
+                sl_result = await self.executor.stop_market_order(
+                    cfg.symbol, sl_side, quantity, sl_price, self._precision
+                )
                 stop_order_id = sl_result.get("orderId", 0)
 
             except Exception as e:
@@ -220,15 +226,14 @@ class TrendBreakBot:
 
         if self.executor and self.config.mode == "live":
             try:
-                # Stop emrini iptal et
                 await self.executor.cancel_all_orders(self.config.symbol)
-
-                # Pozisyonu kapat — miktarı exchange'den al (en güvenli yol)
                 live_pos = await self.executor.get_position(self.config.symbol)
                 qty = abs(float(live_pos["positionAmt"])) if live_pos else pos.quantity
                 if qty > 0:
-                    await self.executor.close_position_market(self.config.symbol, qty if pos.side == "long" else -qty)
-
+                    amt = qty if pos.side == "long" else -qty
+                    await self.executor.close_position_market(
+                        self.config.symbol, amt, self._precision
+                    )
             except Exception as e:
                 logger.error(f"Pozisyon kapatma hatası: {e}")
                 self._log_trade("info", f"⚠ Kapatma hatası: {e}")

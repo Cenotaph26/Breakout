@@ -509,7 +509,6 @@ function render(s) {
 
   if (s.trend)   renderTrend(s.trend);
   renderPos(s.position, s.current_price);
-  if (s.candles?.length>0) drawChart(s.candles, s.current_price, s.position, s.trend);
   if (s.trade_log) renderLog(s.trade_log);
 }
 
@@ -712,13 +711,26 @@ async function applyConfig(){
   btn.classList.remove('btn-loading'); btn.disabled=false;
 }
 
+// ── Chart animation loop ─────────────────────────────────────────
+// Her 250ms'de bir fiyat çizgisi dahil grafiği yeniden çizer.
+// WS partial-update'e bağımlı değil — lastState'ten okur.
+let _lastDrawPrice = 0;
+function chartLoop() {
+  if (lastState) {
+    const p = lastState.current_price || 0;
+    // Candles varsa ve fiyat değiştiyse (veya 1s geçtiyse) çiz
+    if (lastState.candles?.length > 0) {
+      drawChart(lastState.candles, p, lastState.position, lastState.trend);
+      _lastDrawPrice = p;
+    }
+  }
+  setTimeout(chartLoop, 250);
+}
+
 // ── Init ─────────────────────────────────────────────────────────
 window.addEventListener('load',()=>{
-  initChart(); connectWS();
-  window.addEventListener('resize',()=>{
-    initChart();
-    if(lastState) drawChart(lastState.candles,lastState.current_price,lastState.position,lastState.trend);
-  });
+  initChart(); connectWS(); chartLoop();
+  window.addEventListener('resize',()=>{ initChart(); });
 });
 </script>
 </body>

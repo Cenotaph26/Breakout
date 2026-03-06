@@ -1,12 +1,13 @@
 """
-Price Feed — Binance Futures WebSocket (1m kline stream)
-Simülasyon modu da dahil.
+Price Feed
+BinanceFeed: Testnet/Live USDT-M Futures
+- kline_1m stream  → kapanan mumda strateji tetikler
+- miniTicker stream → her ~1s anlık fiyat günceller (grafik canlı kalır)
 """
 
 import asyncio
 import json
 import logging
-import math
 import random
 import time
 
@@ -16,96 +17,96 @@ from src.bot import Candle, TrendBreakBot
 
 logger = logging.getLogger(__name__)
 
+# Testnet WS:  wss://fstream.binancefuture.com/ws  (REST ile aynı host değil!)
+# Live WS:     wss://fstream.binance.com/ws
+TESTNET_WS = "wss://fstream.binancefuture.com/ws"
+LIVE_WS    = "wss://fstream.binance.com/ws"
+
 
 class BinanceFeed:
-    """
-    Live 1-minute kline feed from Binance.
-    account_type: SPOT | USDT_FUTURES | COIN_FUTURES
-    Demo hesap için normal API key + BinanceEnvironment.DEMO kullanılır.
-    """
+    def __init__(self, bot: TrendBreakBot, demo: bool = True):
+        self.bot  = bot
+        self.demo = demo
+        self._kline_task:  asyncio.Task | None = None
+        self._ticker_task: asyncio.Task | None = None
 
-    # Spot public stream
-    WS_SPOT    = "wss://stream.binance.com:9443/ws"
-    # Futures public stream
-    WS_FUTURES = "wss://fstream.binance.com/ws"
-
-    def __init__(self, bot: TrendBreakBot,
-                 api_key: str = "",
-                 api_secret: str = "",
-                 account_type: str = "USDT_FUTURES"):
-        self.bot          = bot
-        self.api_key      = api_key
-        self.api_secret   = api_secret
-        self.account_type = account_type.upper()
-        self._task: asyncio.Task | None = None
-
-    def _ws_url(self) -> str:
-        symbol = self.bot.config.symbol.lower()
-        # Perpetual futures symbol: BTCUSDT-PERP → btcusdt, BTCUSDT → btcusdt
-        sym = symbol.replace("-perp", "").replace("-", "")
-        if self.account_type in ("USDT_FUTURES", "COIN_FUTURES"):
-            return f"{self.WS_FUTURES}/{sym}@kline_1m"
-        return f"{self.WS_SPOT}/{sym}@kline_1m"
+    def _ws_base(self):
+        return TESTNET_WS if self.demo else LIVE_WS
 
     async def start(self):
-        self._task = asyncio.create_task(self._run())
+        self._kline_task  = asyncio.create_task(self._kline_stream())
+        self._ticker_task = asyncio.create_task(self._ticker_stream())
 
     async def stop(self):
-        if self._task:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-            self._task = None
+        for t in (self._kline_task, self._ticker_task):
+            if t:
+                t.cancel()
+                try:    await t
+                except: pass
+        self._kline_task = self._ticker_task = None
 
-    async def _run(self):
-        url = self._ws_url()
-        logger.info(f"Binance bağlanıyor: {url} | account={self.account_type}")
-
+    async def _kline_stream(self):
+        sym = self.bot.config.symbol.lower()
+        url = f"{self._ws_base()}/{sym}@kline_1m"
+        logger.info(f"Kline stream → {url}")
         while self.bot.running:
             try:
-                async with websockets.connect(url, ping_interval=20) as ws:
-                    logger.info("Binance WS bağlandı.")
+                async with websockets.connect(url, ping_interval=20, ping_timeout=30) as ws:
+                    logger.info("✅ Kline stream bağlandı")
                     async for raw in ws:
-                        if not self.bot.running:
-                            break
-                        data = json.loads(raw)
-                        k = data.get("k", {})
-                        if k.get("x"):   # kapalı mum
-                            candle = Candle(
-                                open=float(k["o"]),
-                                high=float(k["h"]),
-                                low=float(k["l"]),
-                                close=float(k["c"]),
-                                volume=float(k["v"]),
-                                timestamp=int(k["t"]),
-                            )
-                            await self.bot.on_new_candle(candle)
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                logger.warning(f"Binance WS hatası: {exc}. 5sn sonra yeniden bağlanıyor...")
+                        if not self.bot.running: break
+                        try:
+                            d = json.loads(raw)
+                            k = d.get("k", {})
+                            # Her tick'te fiyatı güncelle (grafik için)
+                            self.bot.current_price = float(k.get("c", self.bot.current_price))
+                            if k.get("x"):  # mum kapandı → strateji
+                                candle = Candle(
+                                    open=float(k["o"]), high=float(k["h"]),
+                                    low=float(k["l"]),  close=float(k["c"]),
+                                    volume=float(k["v"]), timestamp=int(k["t"]),
+                                )
+                                await self.bot.on_new_candle(candle)
+                        except Exception as ex:
+                            logger.debug(f"Kline parse: {ex}")
+            except asyncio.CancelledError: raise
+            except Exception as e:
+                logger.warning(f"Kline stream hata: {e} — 5s")
+                await asyncio.sleep(5)
+
+    async def _ticker_stream(self):
+        """Mini ticker: her ~300ms fiyat günceller → grafik canlı kalır."""
+        sym = self.bot.config.symbol.lower()
+        url = f"{self._ws_base()}/{sym}@miniTicker"
+        logger.info(f"Ticker stream → {url}")
+        while self.bot.running:
+            try:
+                async with websockets.connect(url, ping_interval=20, ping_timeout=30) as ws:
+                    logger.info("✅ Ticker stream bağlandı")
+                    async for raw in ws:
+                        if not self.bot.running: break
+                        try:
+                            d = json.loads(raw)
+                            if d.get("e") == "24hrMiniTicker":
+                                self.bot.current_price = float(d["c"])
+                        except: pass
+            except asyncio.CancelledError: raise
+            except Exception as e:
+                logger.warning(f"Ticker stream hata: {e} — 5s")
                 await asyncio.sleep(5)
 
 
 class SimFeed:
-    """
-    Simülasyon fiyat akışı — gerçekçi trend + kırılma davranışı.
-    Her tick_interval saniyede bir kapalı 1m mum üretir.
-    """
-
     def __init__(self, bot: TrendBreakBot, tick_interval: float = 2.0):
-        self.bot = bot
+        self.bot           = bot
         self.tick_interval = tick_interval
         self._task: asyncio.Task | None = None
-
-        self._price = 67_000.0
-        self._trend = 1            # +1 yükseliş, -1 düşüş
-        self._trend_candles = 0    # kaç mumdur aynı trend sürüyor
-        self._trend_duration = random.randint(6, 15)  # trend kaç mum sürecek
-        self._volatility = 0.0018  # daha yüksek volatilite → daha fazla kırılma
-        self._momentum = 0.0       # birikmiş yön kuvveti
+        self._price          = 67_000.0
+        self._trend          = 1
+        self._trend_candles  = 0
+        self._trend_duration = random.randint(6, 15)
+        self._volatility     = 0.0018
+        self._momentum       = 0.0
 
     async def start(self):
         self._task = asyncio.create_task(self._run())
@@ -113,70 +114,43 @@ class SimFeed:
     async def stop(self):
         if self._task:
             self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
+            try:    await self._task
+            except: pass
             self._task = None
 
     async def _run(self):
-        logger.info(f"SimFeed başlatıldı — tick={self.tick_interval}s | vol={self._volatility}")
+        logger.info(f"SimFeed başlatıldı — tick={self.tick_interval}s")
         while self.bot.running:
-            candle = self._next_candle()
-            await self.bot.on_new_candle(candle)
+            c = self._next_candle()
+            self.bot.current_price = c.close
+            await self.bot.on_new_candle(c)
             await asyncio.sleep(self.tick_interval)
 
     def _next_candle(self) -> Candle:
-        open_p = self._price
-
-        # Trend yönüne göre güçlü momentum bias
-        # trend=+1 → yukarı, trend=-1 → aşağı
-        bias = 0.56 if self._trend > 0 else 0.44  # Belirgin yön kuvveti
-
-        # Momentum birikimi (trend içinde hızlanma)
-        self._momentum = self._momentum * 0.7 + (self._trend * 0.0003)
-
-        steps = 10
-        close_p = open_p
-        high_p = open_p
-        low_p = open_p
-
-        for _ in range(steps):
-            r = (random.random() - (1 - bias)) * self._volatility * 2
-            r += self._momentum  # momentum ekle
-            close_p *= (1 + r)
-            high_p = max(high_p, close_p)
-            low_p = min(low_p, close_p)
-
-        # Wick ekle (daha gerçekçi mum gövdesi)
-        wick = abs(close_p - open_p) * random.uniform(0.1, 0.4)
-        if self._trend > 0:
-            high_p = max(high_p, close_p + wick)
-        else:
-            low_p = min(low_p, close_p - wick)
-
-        # Trend süresi dolunca flip
+        op = self._price
+        bias = 0.56 if self._trend > 0 else 0.44
+        self._momentum = self._momentum * 0.7 + self._trend * 0.0003
+        cp = hp = lp = op
+        for _ in range(10):
+            r  = (random.random() - (1 - bias)) * self._volatility * 2 + self._momentum
+            cp *= (1 + r)
+            hp  = max(hp, cp)
+            lp  = min(lp, cp)
+        wick = abs(cp - op) * random.uniform(0.1, 0.4)
+        if self._trend > 0: hp = max(hp, cp + wick)
+        else:               lp = min(lp, cp - wick)
         self._trend_candles += 1
         if self._trend_candles >= self._trend_duration:
-            self._trend *= -1
-            self._trend_candles = 0
+            self._trend *= -1; self._trend_candles = 0
             self._trend_duration = random.randint(5, 20)
             self._momentum = 0.0
-            # Kırılma anında volatilite artışı (breakout spike)
             self._volatility = random.uniform(0.0020, 0.0035)
-            logger.debug(f"Trend flip → {'UP' if self._trend > 0 else 'DOWN'} | dur={self._trend_duration}")
         else:
-            # Normal seyirde volatilite normalize
             self._volatility = max(0.0012, self._volatility * 0.95)
-
-        self._price = close_p
-        ts = int(time.time() * 1000)
-
+        self._price = cp
         return Candle(
-            open=round(open_p, 2),
-            high=round(max(open_p, high_p), 2),
-            low=round(min(open_p, low_p), 2),
-            close=round(close_p, 2),
-            volume=round(random.uniform(20, 200), 2),
-            timestamp=ts,
+            open=round(op,2), high=round(max(op,hp),2),
+            low=round(min(op,lp),2), close=round(cp,2),
+            volume=round(random.uniform(20,200),2),
+            timestamp=int(time.time()*1000),
         )

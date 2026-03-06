@@ -1,163 +1,122 @@
-"""
-Price Feed — Binance WS
-- kline_1m: mum kapanışında strateji tetikler
-- miniTicker: anlık fiyat (sadece SL kontrolü)
-"""
+"""Price Feed — Binance WS + Sim."""
 
-import asyncio
-import json
-import logging
-import random
-import time
-
+import asyncio, json, logging, random, time
 import websockets
+from src.bot import Candle, Bot
 
-from src.bot import Candle, TrendBreakBot
-
-logger = logging.getLogger(__name__)
+log = logging.getLogger("feed")
 
 TESTNET_WS = "wss://fstream.binancefuture.com/ws"
 LIVE_WS    = "wss://fstream.binance.com/ws"
 
 
 class BinanceFeed:
-    def __init__(self, bot: TrendBreakBot, demo: bool = True):
-        self.bot  = bot
+    def __init__(self, bot: Bot, demo=True):
+        self.bot = bot
         self.demo = demo
-        self._kline_task:  asyncio.Task | None = None
-        self._ticker_task: asyncio.Task | None = None
+        self._tasks = []
 
-    def _ws_base(self):
-        return TESTNET_WS if self.demo else LIVE_WS
+    def _ws(self): return TESTNET_WS if self.demo else LIVE_WS
 
     async def start(self):
-        self._kline_task  = asyncio.create_task(self._kline_stream())
-        self._ticker_task = asyncio.create_task(self._ticker_stream())
+        self._tasks = [
+            asyncio.create_task(self._kline_loop()),
+            asyncio.create_task(self._ticker_loop()),
+        ]
 
     async def stop(self):
-        for t in (self._kline_task, self._ticker_task):
-            if t:
-                t.cancel()
-                try:    await t
-                except: pass
-        self._kline_task = self._ticker_task = None
+        for t in self._tasks:
+            t.cancel()
+            try: await t
+            except: pass
+        self._tasks = []
 
-    async def _kline_stream(self):
-        sym = self.bot.config.symbol.lower()
-        url = f"{self._ws_base()}/{sym}@kline_1m"
-        logger.info(f"Kline stream → {url}")
+    async def _kline_loop(self):
+        sym = self.bot.cfg.symbol.lower()
+        url = f"{self._ws()}/{sym}@kline_1m"
         while self.bot.running:
             try:
-                async with websockets.connect(
-                    url, ping_interval=15, ping_timeout=10, close_timeout=5,
-                ) as ws:
-                    logger.info("Kline stream bağlandı")
+                async with websockets.connect(url, ping_interval=15, ping_timeout=10) as ws:
+                    log.info("Kline stream bağlandı")
                     async for raw in ws:
                         if not self.bot.running: break
                         try:
-                            d = json.loads(raw)
-                            k = d.get("k", {})
-                            self.bot.current_price = float(k.get("c", self.bot.current_price))
-                            # Her kline update'inde live candle'ı güncelle
+                            k = json.loads(raw).get("k", {})
+                            # Her tick'te live candle güncelle
                             self.bot.live_candle = {
                                 "o": float(k["o"]), "h": float(k["h"]),
-                                "l": float(k["l"]), "c": float(k["c"]),
-                                "t": int(k["t"]),
+                                "l": float(k["l"]), "c": float(k["c"]), "t": int(k["t"]),
                             }
-                            if k.get("x"):  # mum kapandı
-                                candle = Candle(
-                                    open=float(k["o"]), high=float(k["h"]),
-                                    low=float(k["l"]),  close=float(k["c"]),
-                                    volume=float(k["v"]), timestamp=int(k["t"]),
-                                )
+                            self.bot.price = float(k["c"])
+                            # Mum kapandıysa strateji tetikle
+                            if k.get("x"):
+                                c = Candle(o=float(k["o"]),h=float(k["h"]),l=float(k["l"]),c=float(k["c"]),v=float(k["v"]),t=int(k["t"]))
                                 self.bot.live_candle = None
-                                await self.bot.on_new_candle(candle)
-                        except Exception as ex:
-                            logger.debug(f"Kline parse: {ex}")
+                                await self.bot.on_candle(c)
+                        except Exception as e:
+                            log.debug(f"Kline parse: {e}")
             except asyncio.CancelledError: raise
             except Exception as e:
-                logger.warning(f"Kline stream hata: {e} — 3s bekle")
+                log.warning(f"Kline hata: {e}")
                 await asyncio.sleep(3)
 
-    async def _ticker_stream(self):
-        sym = self.bot.config.symbol.lower()
-        url = f"{self._ws_base()}/{sym}@miniTicker"
-        logger.info(f"Ticker stream → {url}")
+    async def _ticker_loop(self):
+        sym = self.bot.cfg.symbol.lower()
+        url = f"{self._ws()}/{sym}@miniTicker"
         while self.bot.running:
             try:
-                async with websockets.connect(
-                    url, ping_interval=15, ping_timeout=10, close_timeout=5,
-                ) as ws:
-                    logger.info("Ticker stream bağlandı")
+                async with websockets.connect(url, ping_interval=15, ping_timeout=10) as ws:
+                    log.info("Ticker stream bağlandı")
                     async for raw in ws:
                         if not self.bot.running: break
                         try:
                             d = json.loads(raw)
                             if "c" in d:
-                                price = float(d["c"])
-                                await self.bot.on_price_tick(price)
+                                await self.bot.on_tick(float(d["c"]))
                         except: pass
             except asyncio.CancelledError: raise
             except Exception as e:
-                logger.warning(f"Ticker stream hata: {e} — 3s bekle")
+                log.warning(f"Ticker hata: {e}")
                 await asyncio.sleep(3)
 
 
 class SimFeed:
-    def __init__(self, bot: TrendBreakBot, tick_interval: float = 2.0):
-        self.bot           = bot
-        self.tick_interval = tick_interval
-        self._task: asyncio.Task | None = None
-        self._price          = 67_000.0
-        self._trend          = 1
-        self._trend_candles  = 0
-        self._trend_duration = random.randint(6, 15)
-        self._volatility     = 0.0018
-        self._momentum       = 0.0
+    def __init__(self, bot: Bot, interval=2.0):
+        self.bot = bot
+        self.interval = interval
+        self._task = None
+        self._p = 67000.0; self._trend = 1; self._tc = 0; self._td = random.randint(6,15)
+        self._vol = 0.0018; self._mom = 0.0
 
     async def start(self):
         self._task = asyncio.create_task(self._run())
 
     async def stop(self):
-        if self._task:
-            self._task.cancel()
-            try:    await self._task
-            except: pass
-            self._task = None
+        if self._task: self._task.cancel()
+        try: await self._task
+        except: pass
 
     async def _run(self):
-        logger.info(f"SimFeed başlatıldı — tick={self.tick_interval}s")
         while self.bot.running:
-            c = self._next_candle()
-            self.bot.current_price = c.close
-            await self.bot.on_new_candle(c)
-            await asyncio.sleep(self.tick_interval)
+            c = self._gen()
+            self.bot.price = c.c
+            await self.bot.on_candle(c)
+            await asyncio.sleep(self.interval)
 
-    def _next_candle(self) -> Candle:
-        op = self._price
-        bias = 0.56 if self._trend > 0 else 0.44
-        self._momentum = self._momentum * 0.7 + self._trend * 0.0003
+    def _gen(self) -> Candle:
+        op = self._p; bias = 0.56 if self._trend > 0 else 0.44
+        self._mom = self._mom * 0.7 + self._trend * 0.0003
         cp = hp = lp = op
         for _ in range(10):
-            r  = (random.random() - (1 - bias)) * self._volatility * 2 + self._momentum
-            cp *= (1 + r)
-            hp  = max(hp, cp)
-            lp  = min(lp, cp)
-        wick = abs(cp - op) * random.uniform(0.1, 0.4)
-        if self._trend > 0: hp = max(hp, cp + wick)
-        else:               lp = min(lp, cp - wick)
-        self._trend_candles += 1
-        if self._trend_candles >= self._trend_duration:
-            self._trend *= -1; self._trend_candles = 0
-            self._trend_duration = random.randint(5, 20)
-            self._momentum = 0.0
-            self._volatility = random.uniform(0.0020, 0.0035)
-        else:
-            self._volatility = max(0.0012, self._volatility * 0.95)
-        self._price = cp
-        return Candle(
-            open=round(op,2), high=round(max(op,hp),2),
-            low=round(min(op,lp),2), close=round(cp,2),
-            volume=round(random.uniform(20,200),2),
-            timestamp=int(time.time()*1000),
-        )
+            r = (random.random() - (1-bias)) * self._vol * 2 + self._mom
+            cp *= (1+r); hp = max(hp,cp); lp = min(lp,cp)
+        wick = abs(cp-op)*random.uniform(0.1,0.4)
+        if self._trend > 0: hp = max(hp,cp+wick)
+        else: lp = min(lp,cp-wick)
+        self._tc += 1
+        if self._tc >= self._td:
+            self._trend *= -1; self._tc = 0; self._td = random.randint(5,20)
+            self._mom = 0; self._vol = random.uniform(.002,.0035)
+        else: self._vol = max(.0012, self._vol*.95)
+        self._p = cp
+        return Candle(o=round(op,2),h=round(max(op,hp),2),l=round(min(op,lp),2),c=round(cp,2),v=round(random.uniform(20,200),2),t=int(time.time()*1000))

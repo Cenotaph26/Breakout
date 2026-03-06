@@ -1,87 +1,22 @@
-# TrendBreak Bot 🤖
+# TrendBreak Bot v2
 
-1-dakikalık trend kırılma stratejisi ile çalışan trading bot.
+1dk mum trend takibi + breakout stratejisi. Binance USDT-M Futures (Testnet/Live).
 
 ## Strateji
+- Son N mumdan kanal (highest high, lowest low) oluşturulur
+- Mum kapanışında fiyat kanalı kırarsa → LONG veya SHORT
+- Stop-loss: RT tick kontrolü + mum kapanış kontrolü
+- Ters sinyal → pozisyon kapatılır
+- Cooldown: her trade sonrası bekleme süresi
 
-1. Son N mumu analiz ederek trend yönü (yukarı/aşağı/yatay) belirlenir
-2. Fiyat trend yüksek seviyesini kırarsa → **LONG** açılır
-3. Fiyat trend düşük seviyesini kırarsa → **SHORT** açılır
-4. Trend bozulduğunda (fiyat ters tarafa geçtiğinde) → **pozisyon kapanır**
-5. Stop loss tetiklendiğinde → **pozisyon kapanır**
-
-## Railway Deploy
-
-### 1. GitHub'a yükle
-
-```bash
-git init
-git add .
-git commit -m "TrendBreak Bot"
-git remote add origin https://github.com/KULLANICI/trendbreak-bot.git
-git push -u origin main
-```
-
-### 2. Railway'e deploy et
-
-1. [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo**
-2. Repo'yu seç
-3. Otomatik deploy başlar
-4. **Settings → Networking → Generate Domain** ile public URL al
-
-### 3. Kullan
-
-- URL'yi aç → dashboard açılır
-- **Simülasyon** modunda test et
-- **Binance Live** modunda gerçek veri akışı alır (işlem açmaz, sadece sinyal üretir)
-
-## Ortam Değişkenleri (Opsiyonel)
-
-Railway → Variables kısmına ekle:
-
-| Değişken | Açıklama |
-|---|---|
-| `PORT` | Otomatik atanır (Railway) |
-
-## Proje Yapısı
-
-```
-trendbreak-bot/
-├── main.py              # Giriş noktası
-├── src/
-│   ├── bot.py           # Strateji motoru
-│   ├── feed.py          # Binance WS + Simülasyon feed
-│   └── server.py        # FastAPI + WebSocket
-├── templates/
-│   └── index.html       # Dashboard UI
-├── requirements.txt
-├── railway.toml
-├── nixpacks.toml
-└── Procfile
-```
-
-## API Endpoints
-
-| Method | Path | Açıklama |
-|---|---|---|
-| GET | `/` | Dashboard |
-| POST | `/api/start` | Bot başlat |
-| POST | `/api/stop` | Bot durdur |
-| GET | `/api/state` | Mevcut durum |
-| GET | `/api/health` | Sağlık kontrolü |
-| WS | `/ws` | Gerçek zamanlı veri |
-
-## Yerel Çalıştırma
-
-```bash
-pip install -r requirements.txt
-python main.py
-# → http://localhost:8000
-```
-
-## ⚠️ Uyarı
-
-Bu bot eğitim amaçlıdır. Gerçek para ile kullanmadan önce:
-- Simülasyon modunda kapsamlı test yapın
-- Risk yönetimini dikkatli ayarlayın
-- Geçmiş performans gelecek sonuçları garantilemez
+## Env Variables
+- `BINANCE_API_KEY`, `BINANCE_API_SECRET`
+- `BINANCE_DEMO=true` (testnet)
+- `MODE=live` (live/sim)
+- `SYMBOL=BTCUSDT`
+- `TRADE_SIZE=100`
+- `LEVERAGE=5`
+- `TREND_PERIOD=4`
+- `BREAK_THRESHOLD=0.05` (%)
+- `STOP_LOSS_PCT=0.5` (%)
+- `COOLDOWN=15` (saniye)

@@ -108,30 +108,35 @@ class TrendBreakBot:
         if len(self.candles) < n + 1:
             return None
 
-        channel    = self.candles[-(n+1):-1]
-        trend_high = max(c.high for c in channel)
-        trend_low  = min(c.low  for c in channel)
+        channel    = self.candles[-(n+1):-1]   # son n mum (henüz kapanmamış hariç)
+        trend_high = max(c.high  for c in channel)
+        trend_low  = min(c.low   for c in channel)
 
-        up   = sum(1 for i in range(1, len(channel)) if channel[i].close > channel[i-1].close)
-        down = len(channel) - 1 - up
+        closes = [c.close for c in channel]
+        up   = sum(1 for i in range(1, len(closes)) if closes[i] > closes[i-1])
+        down = len(closes) - 1 - up
 
-        if up > down * 1.2:
-            direction = "up"
-        elif down > up * 1.2:
-            direction = "down"
-        else:
-            direction = "sideways"
+        # Daha hassas trend tespiti
+        if up >= down + 2:        direction = "up"
+        elif down >= up + 2:      direction = "down"
+        else:                     direction = "sideways"
 
         return TrendAnalysis(
-            direction  = direction,
-            trend_high = trend_high,
-            trend_low  = trend_low,
-            up_candles = up,
+            direction    = direction,
+            trend_high   = trend_high,
+            trend_low    = trend_low,
+            up_candles   = up,
             down_candles = down,
-            strength   = round(max(up, down) / max(len(channel) - 1, 1), 2),
+            strength     = round(max(up, down) / max(len(closes) - 1, 1), 2),
         )
 
     def detect_breakout(self, trend: TrendAnalysis, price: float) -> Optional[str]:
+        """
+        Breakout mantığı:
+        - Her yönde: fiyat kanalın üstünü kırarsa LONG, altını kırarsa SHORT
+        - Eşik: break_threshold (varsayılan 0.05%)
+        - Sideways dahil tüm trend durumlarında çalışır
+        """
         thr = self.config.break_threshold
         if price > trend.trend_high * (1 + thr):
             return "long"
@@ -143,10 +148,14 @@ class TrendBreakBot:
         pos = self.position
         if not pos:
             return None
-        if pos.side == "long"  and price <= pos.stop_loss:   return "STOP LOSS"
-        if pos.side == "short" and price >= pos.stop_loss:   return "STOP LOSS"
-        if pos.side == "long"  and price < trend.trend_low:  return "TREND BOZULDU"
-        if pos.side == "short" and price > trend.trend_high: return "TREND BOZULDU"
+        # Stop loss kontrolü
+        if pos.side == "long"  and price <= pos.stop_loss: return "STOP LOSS"
+        if pos.side == "short" and price >= pos.stop_loss: return "STOP LOSS"
+        # Trend tersine döndü mü?
+        if pos.side == "long"  and trend.direction == "down" and price < trend.trend_low:
+            return "TREND BOZULDU"
+        if pos.side == "short" and trend.direction == "up"   and price > trend.trend_high:
+            return "TREND BOZULDU"
         return None
 
     # ── Position sizing ───────────────────────────────────────────────────────
@@ -290,10 +299,11 @@ class TrendBreakBot:
                     await self.close_position(candle.close, reason)
                     return
 
-            # Entry check
-            if not self.position and trend.direction != "sideways":
+            # Entry check — her trend yönünde breakout ara
+            if not self.position:
                 signal = self.detect_breakout(trend, candle.close)
                 if signal:
+                    logger.info(f"🎯 Breakout sinyali: {signal} @ {candle.close:.2f} | trend={trend.direction} | high={trend.trend_high:.2f} low={trend.trend_low:.2f}")
                     await self.open_position(signal, candle.close)
 
     # ── State snapshot ────────────────────────────────────────────────────────

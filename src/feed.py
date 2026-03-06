@@ -51,16 +51,20 @@ class BinanceFeed:
         logger.info(f"Kline stream → {url}")
         while self.bot.running:
             try:
-                async with websockets.connect(url, ping_interval=20, ping_timeout=30) as ws:
+                async with websockets.connect(
+                    url,
+                    ping_interval=15,   # her 15s Binance'e ping
+                    ping_timeout=10,
+                    close_timeout=5,
+                ) as ws:
                     logger.info("✅ Kline stream bağlandı")
                     async for raw in ws:
                         if not self.bot.running: break
                         try:
                             d = json.loads(raw)
                             k = d.get("k", {})
-                            # Her tick'te fiyatı güncelle (grafik için)
                             self.bot.current_price = float(k.get("c", self.bot.current_price))
-                            if k.get("x"):  # mum kapandı → strateji
+                            if k.get("x"):
                                 candle = Candle(
                                     open=float(k["o"]), high=float(k["h"]),
                                     low=float(k["l"]),  close=float(k["c"]),
@@ -71,29 +75,33 @@ class BinanceFeed:
                             logger.debug(f"Kline parse: {ex}")
             except asyncio.CancelledError: raise
             except Exception as e:
-                logger.warning(f"Kline stream hata: {e} — 5s")
-                await asyncio.sleep(5)
+                logger.warning(f"Kline stream hata: {e} — 3s")
+                await asyncio.sleep(3)
 
     async def _ticker_stream(self):
-        """Mini ticker: her ~300ms fiyat günceller → grafik canlı kalır."""
         sym = self.bot.config.symbol.lower()
         url = f"{self._ws_base()}/{sym}@miniTicker"
         logger.info(f"Ticker stream → {url}")
         while self.bot.running:
             try:
-                async with websockets.connect(url, ping_interval=20, ping_timeout=30) as ws:
+                async with websockets.connect(
+                    url,
+                    ping_interval=15,
+                    ping_timeout=10,
+                    close_timeout=5,
+                ) as ws:
                     logger.info("✅ Ticker stream bağlandı")
                     async for raw in ws:
                         if not self.bot.running: break
                         try:
                             d = json.loads(raw)
-                            if d.get("e") == "24hrMiniTicker":
+                            if "c" in d:
                                 self.bot.current_price = float(d["c"])
                         except: pass
             except asyncio.CancelledError: raise
             except Exception as e:
-                logger.warning(f"Ticker stream hata: {e} — 5s")
-                await asyncio.sleep(5)
+                logger.warning(f"Ticker stream hata: {e} — 3s")
+                await asyncio.sleep(3)
 
 
 class SimFeed:

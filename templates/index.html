@@ -233,16 +233,26 @@ setInterval(() => {
 function connectWS() {
   const proto = location.protocol==='https:'?'wss':'ws';
   ws = new WebSocket(`${proto}://${location.host}/ws`);
-  ws.onopen  = () => { setConn(true); fetchBal(); };
+  ws.onopen  = () => {
+    setConn(true); fetchBal();
+    // Railway proxy'sini canlı tutmak için her 20s ping gönder
+    if (window._pingInterval) clearInterval(window._pingInterval);
+    window._pingInterval = setInterval(() => {
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send('ping');
+    }, 20000);
+  };
   ws.onmessage = e => {
     try {
       const d = JSON.parse(e.data);
-      if (d.ping) return;          // server keepalive ping — yoksay
-      lastState = d;
-      render(d);
+      if (d.ping) return;
+      lastState = d; render(d);
     } catch(_) {}
   };
-  ws.onclose = () => { setConn(false); setTimeout(connectWS, 3000); };
+  ws.onclose = () => {
+    setConn(false);
+    if (window._pingInterval) { clearInterval(window._pingInterval); window._pingInterval = null; }
+    setTimeout(connectWS, 3000);
+  };
   ws.onerror = () => ws.close();
 }
 

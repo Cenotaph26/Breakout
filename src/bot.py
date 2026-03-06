@@ -5,6 +5,7 @@ Binance Demo (Testnet) üzerinde gerçek emir açar.
 
 import asyncio
 import logging
+import math
 import time
 from dataclasses import dataclass, asdict
 from typing import Optional
@@ -161,12 +162,14 @@ class TrendBreakBot:
     # ── Position sizing ───────────────────────────────────────────────────────
 
     def _calc_quantity(self, price: float) -> float:
-        """USDT büyüklüğünü ve kaldıracı kullanarak base asset miktarını hesapla."""
+        """Notional değeri base asset miktarına çevir, stepSize'a göre yuvarla."""
+        if self.executor:
+            step = self.executor._qty_step
+        else:
+            step = self._min_qty
         qty = (self.config.trade_size_usdt * self.config.leverage) / price
-        # Round down to min_qty step
-        step = self._min_qty
-        qty  = max(step, round(qty // step * step, 8))
-        return qty
+        qty = math.floor(qty / step) * step
+        return max(step, round(qty, 8))
 
     # ── Order execution (live or simulated) ──────────────────────────────────
 
@@ -187,19 +190,17 @@ class TrendBreakBot:
                 # 2. Market giriş emri
                 order_side = "BUY" if side == "long" else "SELL"
                 result     = await self.executor.market_order(
-                    cfg.symbol, order_side, quantity, self._precision
+                    cfg.symbol, order_side, quantity
                 )
                 order_id   = result.get("orderId", 0)
-                # Gerçek dolu fiyatı al
                 avg = float(result.get("avgPrice") or 0)
                 if avg > 0:
                     price    = avg
                     sl_price = price * (1 - cfg.stop_loss_pct) if side == "long" else price * (1 + cfg.stop_loss_pct)
 
-                # 3. Stop-loss emri
                 sl_side   = "SELL" if side == "long" else "BUY"
                 sl_result = await self.executor.stop_market_order(
-                    cfg.symbol, sl_side, quantity, sl_price, self._precision
+                    cfg.symbol, sl_side, quantity, sl_price
                 )
                 stop_order_id = sl_result.get("orderId", 0)
 
@@ -240,9 +241,7 @@ class TrendBreakBot:
                 qty = abs(float(live_pos["positionAmt"])) if live_pos else pos.quantity
                 if qty > 0:
                     amt = qty if pos.side == "long" else -qty
-                    await self.executor.close_position_market(
-                        self.config.symbol, amt, self._precision
-                    )
+                    await self.executor.close_position_market(self.config.symbol, amt)
             except Exception as e:
                 logger.error(f"Pozisyon kapatma hatası: {e}")
                 self._log_trade("info", f"⚠ Kapatma hatası: {e}")

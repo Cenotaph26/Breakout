@@ -245,7 +245,11 @@ function connectWS() {
     try {
       const d = JSON.parse(e.data);
       if (d.ping) return;
-      lastState = d; render(d);
+      // Partial update: candles yoksa önceki state'ten al
+      if (!d.candles && lastState?.candles) d.candles = lastState.candles;
+      if (!d.trade_log && lastState?.trade_log) d.trade_log = lastState.trade_log;
+      lastState = {...(lastState||{}), ...d};
+      render(lastState);
     } catch(_) {}
   };
   ws.onclose = () => {

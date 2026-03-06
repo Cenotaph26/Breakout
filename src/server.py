@@ -76,10 +76,9 @@ async def start_bot_from_env():
         exc = BinanceExecutor(raw["api_key"], raw["api_secret"], demo=raw["demo"])
         try:
             await exc.test_connection()
-            min_qty   = await exc.get_min_qty(cfg.symbol)
-            precision = await exc.get_qty_precision(cfg.symbol)
+            await exc.load_symbol_filters(cfg.symbol)   # tickSize + stepSize
             binance_ok = True
-            logger.info(f"✅ Binance OK | min_qty={min_qty} prec={precision}")
+            logger.info(f"✅ Binance OK | qty_step={exc._qty_step} price_step={exc._price_step}")
         except Exception as e:
             startup_error = f"Binance hatası: {str(e)[:150]}"
             logger.error(f"❌ {startup_error}")
@@ -87,8 +86,6 @@ async def start_bot_from_env():
             mode = "sim"; cfg = mk_cfg("sim")
 
     bot = TrendBreakBot(cfg, executor=exc)
-    bot._min_qty   = min_qty
-    bot._precision = precision
     bot.running    = True
     executor_inst  = exc
 
@@ -125,17 +122,27 @@ async def stop_bot_internal():
 
 
 # ── Broadcast ─────────────────────────────────────────────────
-def _state():
+def _state(full: bool = True):
     s = bot.get_state() if bot else {"running": False}
     s["startup_error"] = startup_error
     s["binance_ok"]    = binance_ok
+    if not full:
+        # Sadece anlık değişenler — candles ve trade_log çıkar
+        s.pop("candles",    None)
+        s.pop("trade_log",  None)
     return s
 
+_tick = 0
+
 async def broadcast_loop():
+    global _tick
     while True:
         await asyncio.sleep(1)
         if not ws_clients: continue
-        payload = json.dumps(_state())
+        _tick += 1
+        # Her 5 saniyede tam state (candles dahil), arası sadece fiyat/pozisyon
+        full    = (_tick % 5 == 0)
+        payload = json.dumps(_state(full=full))
         dead = set()
         for ws in list(ws_clients):
             try: await ws.send_text(payload)
@@ -166,7 +173,7 @@ async def health():
             "candles": len(bot.candles) if bot else 0}
 
 @app.get("/api/state")
-async def state(): return _state()
+async def state(): return _state(full=True)
 
 @app.get("/api/balance")
 async def balance():

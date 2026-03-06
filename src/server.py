@@ -137,7 +137,8 @@ async def broadcast_loop():
         await asyncio.sleep(1)
         if not ws_clients: continue
         _tick += 1
-        full    = (_tick % 5 == 0)
+        # Her 3 saniyede tam state (candles dahil), arası sadece fiyat/pozisyon/trend
+        full    = (_tick % 3 == 0)
         payload = json.dumps(_state(full=full))
         dead = set()
         for ws in list(ws_clients):

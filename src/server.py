@@ -125,7 +125,7 @@ def _state(full: bool = True):
     s["startup_error"] = startup_error
     s["binance_ok"]    = binance_ok
     if not full:
-        s.pop("candles",    None)
+        # Light update: remove heavy trade_log but KEEP candles for live chart
         s.pop("trade_log",  None)
     return s
 

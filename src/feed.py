@@ -58,12 +58,19 @@ class BinanceFeed:
                             d = json.loads(raw)
                             k = d.get("k", {})
                             self.bot.current_price = float(k.get("c", self.bot.current_price))
+                            # Her kline update'inde live candle'ı güncelle
+                            self.bot.live_candle = {
+                                "o": float(k["o"]), "h": float(k["h"]),
+                                "l": float(k["l"]), "c": float(k["c"]),
+                                "t": int(k["t"]),
+                            }
                             if k.get("x"):  # mum kapandı
                                 candle = Candle(
                                     open=float(k["o"]), high=float(k["h"]),
                                     low=float(k["l"]),  close=float(k["c"]),
                                     volume=float(k["v"]), timestamp=int(k["t"]),
                                 )
+                                self.bot.live_candle = None
                                 await self.bot.on_new_candle(candle)
                         except Exception as ex:
                             logger.debug(f"Kline parse: {ex}")

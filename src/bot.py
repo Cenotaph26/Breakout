@@ -98,6 +98,7 @@ class TrendBreakBot:
         self.current_price = 0.0
         self.trade_log: list[dict] = []
         self.current_trend: Optional[TrendAnalysis] = None
+        self.live_candle: Optional[dict] = None  # oluşmakta olan mum
         self._lock     = asyncio.Lock()
         self._min_qty  = 0.001
         self._precision = 3
@@ -394,6 +395,7 @@ class TrendBreakBot:
             "position":      self.position.to_dict(self.current_price) if self.position else None,
             "candles":       [{"o":c.open,"h":c.high,"l":c.low,"c":c.close,"t":c.timestamp}
                               for c in self.candles[-80:]],
+            "live_candle":   self.live_candle,
             "stats":         {**asdict(self.stats), "win_rate": wr},
             "trade_log":     self.trade_log[-50:],
             "config":        asdict(self.config),

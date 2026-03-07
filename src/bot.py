@@ -83,6 +83,7 @@ class Bot:
         self._last_trade: dict[str, float] = {}  # symbol -> last trade time
         self._margin_set: set = set()
         self._filters: dict = {}  # symbol -> {qty_step, qty_prec, price_step, price_prec}
+        self.selected_sym: str = ""  # client'ın seçtiği grafik coini
 
     # ── Log ───────────────────────────────────────────────
 
@@ -336,9 +337,13 @@ class Bot:
             d["current_price"] = p
             pos_list.append(d)
 
-        # Seçili coin'in grafiği (ilk aktif sembol veya ilk pozisyon)
+        # Grafik coin seçimi: client seçimi > ilk pozisyon > BTCUSDT > ilk aktif
         chart_sym = None
-        if self.positions:
+        if self.selected_sym and self.selected_sym in self.symbols:
+            chart_sym = self.selected_sym
+        elif "BTCUSDT" in self.symbols:
+            chart_sym = "BTCUSDT"
+        elif self.positions:
             chart_sym = list(self.positions.keys())[0]
         elif self.active_symbols:
             chart_sym = self.active_symbols[0]

@@ -170,7 +170,17 @@ async def ws_ep(ws: WebSocket):
     try:
         await ws.send_text(json.dumps(get_state()))
         while True:
-            try: await asyncio.wait_for(ws.receive_text(), timeout=30)
+            try:
+                msg = await asyncio.wait_for(ws.receive_text(), timeout=30)
+                # Client coin seçimi gönderebilir
+                try:
+                    d = json.loads(msg)
+                    if d.get("select_sym") and bot:
+                        bot.selected_sym = d["select_sym"].upper()
+                        # Hemen yeni state gönder
+                        await ws.send_text(json.dumps(get_state()))
+                except:
+                    pass
             except asyncio.TimeoutError:
                 try: await ws.send_text('{"ping":true}')
                 except: break

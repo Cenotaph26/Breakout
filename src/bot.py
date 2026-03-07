@@ -1,23 +1,9 @@
 """
-TrendBreak Bot v2 — Sıfırdan temiz strateji.
-
-Mantık:
-  1. Son N kapanmış mumdan kanal oluştur (highest high, lowest low)
-  2. Mum kapanışında fiyat kanalın üstünü kırarsa → LONG
-  3. Mum kapanışında fiyat kanalın altını kırarsa → SHORT
-  4. Pozisyon varken: stop-loss VEYA ters sinyal → kapat
-  5. Tick'lerde sadece stop-loss kontrolü
-
-Güvenlik:
-  - Her trade sonrası cooldown
-  - Bakiye kontrolü
-  - Binance pozisyon senkronizasyonu
-  - Margin type tek sefer
-  - quantity FLOOR yuvarlama
+TrendBreak Bot v3 — Her adımda log, sade mantık.
 """
 
 import asyncio, logging, math, time
-from dataclasses import dataclass, asdict, field
+from dataclasses import dataclass, asdict
 from typing import Optional
 from datetime import datetime, timezone
 
@@ -33,170 +19,159 @@ class Candle:
 class Position:
     side: str; entry: float; qty: float; sl: float
     size_usdt: float; leverage: int; symbol: str
-    oid: int = 0; sl_oid: int = 0; opened: str = ""
+    oid: int = 0; sl_oid: int = 0
 
     def pnl(self, price: float) -> float:
-        d = (price - self.entry) / self.entry if self.side == "long" else (self.entry - price) / self.entry
-        return d * self.size_usdt * self.leverage
+        if self.side == "long":
+            return (price - self.entry) / self.entry * self.size_usdt * self.leverage
+        else:
+            return (self.entry - price) / self.entry * self.size_usdt * self.leverage
 
-    def to_dict(self, price: float) -> dict:
+    def as_dict(self, price: float) -> dict:
         d = asdict(self)
         d["pnl"] = round(self.pnl(price), 4)
-        d["price"] = price
         return d
 
 
 @dataclass
 class Config:
     symbol: str = "BTCUSDT"
-    period: int = 4            # kanal periyodu (mum sayısı)
-    threshold: float = 0.0005  # kırılma eşiği (0.05%)
-    size_usdt: float = 100.0   # pozisyon büyüklüğü
+    period: int = 5
+    threshold: float = 0.0005
+    size_usdt: float = 100.0
     leverage: int = 5
-    sl_pct: float = 0.005      # stop loss (0.5%)
-    cooldown: float = 15.0     # trade arası bekleme (sn)
+    sl_pct: float = 0.005
+    cooldown: float = 15.0
     max_candles: int = 200
-    mode: str = "sim"          # sim | live
+    mode: str = "sim"
 
 
 class Bot:
-    def __init__(self, cfg: Config, executor=None):
+    def __init__(self, cfg: Config, exc=None):
         self.cfg = cfg
-        self.exc = executor
+        self.exc = exc
         self.candles: list[Candle] = []
         self.pos: Optional[Position] = None
         self.price: float = 0.0
         self.running = False
         self.live_candle: Optional[dict] = None
 
-        # Stats
-        self.trades = 0; self.wins = 0; self.losses = 0; self.total_pnl = 0.0
-        self.started = datetime.now(timezone.utc).isoformat()
-
-        # Log
+        self.trades = 0
+        self.wins = 0
+        self.losses = 0
+        self.total_pnl = 0.0
         self.trade_log: list[dict] = []
+        self.trend: Optional[dict] = None
 
-        # Trend
-        self.trend: Optional[dict] = None  # {dir, high, low, strength}
-
-        # Safety
         self._lock = asyncio.Lock()
         self._last_trade: float = 0.0
-        self._margin_set: set = set()
+        self._margin_set = False
 
-    # ── Helpers ──────────────────────────────────────────────
+    # ── Logging ──────────────────────────────────────────
 
-    def _now(self): return datetime.now(timezone.utc).strftime("%H:%M:%S")
+    def _ts(self):
+        return datetime.now(timezone.utc).strftime("%H:%M:%S")
 
-    def _log(self, tp: str, msg: str, pnl: float = 0.0):
+    def _log(self, tp, msg, pnl=0.0):
         ts = int(time.time() * 1000)
         if self.trade_log:
             ts = max(ts, self.trade_log[-1]["ts"] + 1)
-        self.trade_log.append({"type": tp, "msg": msg, "pnl": round(pnl, 4), "time": self._now(), "ts": ts})
+        entry = {"type": tp, "msg": msg, "pnl": round(pnl, 4), "time": self._ts(), "ts": ts}
+        self.trade_log.append(entry)
         if len(self.trade_log) > 200:
             self.trade_log = self.trade_log[-200:]
+        log.info(f"[{tp}] {msg}")
 
-    def _can_trade(self) -> bool:
-        return time.time() - self._last_trade >= self.cfg.cooldown
+    # ── Trend ────────────────────────────────────────────
 
-    def _cooldown_left(self) -> float:
-        return max(0.0, self.cfg.cooldown - (time.time() - self._last_trade))
-
-    # ── Trend & Signal ───────────────────────────────────────
-
-    def _analyze(self):
-        """Son period kapanmış mumdan kanal ve trend hesapla."""
+    def _update_trend(self):
         n = self.cfg.period
         if len(self.candles) < n:
             self.trend = None
             return
 
-        window = self.candles[-n:]
-        high = max(c.h for c in window)
-        low  = min(c.l for c in window)
+        win = self.candles[-n:]
+        high = max(c.h for c in win)
+        low = min(c.l for c in win)
 
-        # Trend yönü: close'ların eğilimi
-        closes = [c.c for c in window]
-        ups = sum(1 for i in range(1, len(closes)) if closes[i] > closes[i-1])
+        closes = [c.c for c in win]
+        ups = sum(1 for i in range(1, len(closes)) if closes[i] > closes[i - 1])
         downs = len(closes) - 1 - ups
 
-        if ups > downs:     d = "up"
-        elif downs > ups:   d = "down"
-        else:               d = "sideways"
+        if ups > downs:
+            d = "up"
+        elif downs > ups:
+            d = "down"
+        else:
+            d = "sideways"
 
-        self.trend = {
-            "dir": d, "high": high, "low": low,
-            "strength": round(max(ups, downs) / max(len(closes)-1, 1), 2),
-            "ups": ups, "downs": downs,
-        }
+        self.trend = {"dir": d, "high": high, "low": low, "strength": round(max(ups, downs) / max(len(closes) - 1, 1), 2)}
 
-    def _signal(self, price: float) -> Optional[str]:
-        """Kırılma sinyali. None = sinyal yok."""
+    def _check_signal(self, price: float) -> Optional[str]:
         if not self.trend:
             return None
-        t = self.trend
         thr = self.cfg.threshold
-
-        if price > t["high"] * (1 + thr):
+        if price > self.trend["high"] * (1 + thr):
             return "long"
-        if price < t["low"] * (1 - thr):
+        if price < self.trend["low"] * (1 - thr):
             return "short"
         return None
 
-    def _should_exit(self, price: float) -> Optional[str]:
-        """Pozisyon çıkış kontrolü."""
+    def _check_exit(self, price: float) -> Optional[str]:
         if not self.pos:
             return None
-
-        # Stop loss
         if self.pos.side == "long" and price <= self.pos.sl:
             return "STOP LOSS"
         if self.pos.side == "short" and price >= self.pos.sl:
             return "STOP LOSS"
-
-        # Ters sinyal: trend tersine döndüyse ve fiyat kanalı kırdıysa
+        # Ters sinyal
         if self.trend:
-            if self.pos.side == "long" and price < self.trend["low"] * (1 - self.cfg.threshold):
-                return "TERS SİNYAL"
-            if self.pos.side == "short" and price > self.trend["high"] * (1 + self.cfg.threshold):
-                return "TERS SİNYAL"
-
+            thr = self.cfg.threshold
+            if self.pos.side == "long" and price < self.trend["low"] * (1 - thr):
+                return "TERS KIRILMA"
+            if self.pos.side == "short" and price > self.trend["high"] * (1 + thr):
+                return "TERS KIRILMA"
         return None
 
-    # ── Quantity ─────────────────────────────────────────────
+    # ── Quantity ─────────────────────────────────────────
 
-    def _qty(self, price: float) -> float:
-        step = self.exc._qty_step if self.exc else 0.001
-        prec = self.exc._qty_prec if self.exc else 3
-        notional = self.cfg.size_usdt * self.cfg.leverage
-        raw = notional / price
+    def _calc_qty(self, price: float) -> float:
+        step = getattr(self.exc, '_qty_step', 0.001) if self.exc else 0.001
+        prec = getattr(self.exc, '_qty_prec', 3) if self.exc else 3
+        raw = self.cfg.size_usdt * self.cfg.leverage / price
         floored = math.floor(raw / step) * step
         return round(max(floored, step), prec)
 
-    # ── Open Position ────────────────────────────────────────
+    def _can_trade(self) -> bool:
+        return time.time() - self._last_trade >= self.cfg.cooldown
+
+    # ── Open ─────────────────────────────────────────────
 
     async def _open(self, side: str, price: float):
-        if not self._can_trade():
-            return
         if self.pos:
+            log.debug("_open atlandı: zaten pozisyon var")
+            return
+        if not self._can_trade():
+            log.debug(f"_open atlandı: cooldown ({self.cfg.cooldown - (time.time() - self._last_trade):.0f}s kaldı)")
             return
 
         cfg = self.cfg
         sl = price * (1 - cfg.sl_pct) if side == "long" else price * (1 + cfg.sl_pct)
-        qty = self._qty(price)
-        oid = 0; sl_oid = 0
+        qty = self._calc_qty(price)
+        oid = 0
+        sl_oid = 0
 
         if self.exc and cfg.mode == "live":
             try:
-                # Bakiye kontrolü
+                # Bakiye
                 bal = await self.exc.get_balance()
-                needed = cfg.size_usdt * 1.15  # %15 tampon
+                needed = cfg.size_usdt * 1.15
                 if bal < needed:
-                    self._log("error", f"Bakiye yetersiz: {bal:.2f} < {needed:.2f}")
+                    self._log("error", f"Yetersiz bakiye: {bal:.2f} < {needed:.2f} USDT")
                     self._last_trade = time.time()
                     return
 
-                # Binance'de açık pozisyon var mı?
+                # Binance pozisyon kontrolü
                 bp = await self.exc.get_position(cfg.symbol)
                 if bp and abs(float(bp.get("positionAmt", 0))) > 0:
                     self._log("error", "Binance'de zaten açık pozisyon var")
@@ -206,30 +181,28 @@ class Bot:
                 # Kaldıraç
                 await self.exc.set_leverage(cfg.symbol, cfg.leverage)
 
-                # Margin type — tek sefer
-                if cfg.symbol not in self._margin_set:
+                # Margin type
+                if not self._margin_set:
                     await self.exc.set_margin_type(cfg.symbol, "ISOLATED")
-                    self._margin_set.add(cfg.symbol)
+                    self._margin_set = True
 
                 # Market emir
-                os = "BUY" if side == "long" else "SELL"
-                res = await self.exc.market_order(cfg.symbol, os, qty)
+                order_side = "BUY" if side == "long" else "SELL"
+                res = await self.exc.market_order(cfg.symbol, order_side, qty)
                 oid = res.get("orderId", 0)
 
-                # Gerçek entry fiyatını al
+                # Entry fiyatı
                 avg = float(res.get("avgPrice") or 0)
                 if avg > 0:
                     price = avg
                 else:
-                    # Testnet avgPrice=0 verir → pozisyondan çek
-                    await asyncio.sleep(0.3)
+                    await asyncio.sleep(0.5)
                     pi = await self.exc.get_position(cfg.symbol)
                     if pi:
                         ep = float(pi.get("entryPrice", 0))
                         if ep > 0:
                             price = ep
 
-                # SL'yi güncelle
                 sl = price * (1 - cfg.sl_pct) if side == "long" else price * (1 + cfg.sl_pct)
 
                 # Stop emri
@@ -238,25 +211,17 @@ class Bot:
                 sl_oid = sl_res.get("orderId", 0)
 
             except Exception as e:
-                log.error(f"Emir hatası: {e}")
-                self._log("error", f"Emir hatası: {str(e)[:100]}")
+                self._log("error", f"Emir hatası: {e}")
                 self._last_trade = time.time()
                 return
 
         self._last_trade = time.time()
-        self.pos = Position(
-            side=side, entry=price, qty=qty, sl=sl,
-            size_usdt=cfg.size_usdt, leverage=cfg.leverage,
-            symbol=cfg.symbol, oid=oid, sl_oid=sl_oid,
-            opened=datetime.now(timezone.utc).isoformat(),
-        )
+        self.pos = Position(side=side, entry=price, qty=qty, sl=sl, size_usdt=cfg.size_usdt, leverage=cfg.leverage, symbol=cfg.symbol, oid=oid, sl_oid=sl_oid)
 
         tag = "CANLI" if cfg.mode == "live" else "SIM"
-        msg = f"[{tag}] {side.upper()} @ {price:.2f} | qty={qty} | SL={sl:.2f} | {cfg.size_usdt}$ x{cfg.leverage}"
-        log.info(msg)
-        self._log(side, msg)
+        self._log(side, f"[{tag}] {side.upper()} @ {price:.2f} | qty={qty} | SL={sl:.2f} | {cfg.size_usdt}$ x{cfg.leverage}")
 
-    # ── Close Position ───────────────────────────────────────
+    # ── Close ────────────────────────────────────────────
 
     async def _close(self, price: float, reason: str):
         if not self.pos:
@@ -266,93 +231,84 @@ class Bot:
             try:
                 await self.exc.cancel_all_orders(self.cfg.symbol)
                 bp = await self.exc.get_position(self.cfg.symbol)
-                qty = abs(float(bp["positionAmt"])) if bp else self.pos.qty
-                if qty > 0:
-                    amt = qty if self.pos.side == "long" else -qty
-                    await self.exc.close_position(self.cfg.symbol, amt)
+                amt = abs(float(bp["positionAmt"])) if bp else self.pos.qty
+                if amt > 0:
+                    signed = amt if self.pos.side == "long" else -amt
+                    await self.exc.close_position(self.cfg.symbol, signed)
             except Exception as e:
-                log.error(f"Kapatma hatası: {e}")
-                self._log("error", f"Kapatma hatası: {str(e)[:100]}")
+                self._log("error", f"Kapatma hatası: {e}")
 
         pnl = self.pos.pnl(price)
         self.trades += 1
-        if pnl > 0: self.wins += 1
-        else: self.losses += 1
+        if pnl > 0:
+            self.wins += 1
+        else:
+            self.losses += 1
         self.total_pnl += pnl
 
-        s = "+" if pnl > 0 else ""
-        msg = f"KAPANDI ({reason}) @ {price:.2f} | PnL: {s}{pnl:.2f}$"
-        log.info(msg)
-        self._log("close", msg, pnl)
-
+        s = "+" if pnl >= 0 else ""
+        self._log("close", f"KAPANDI ({reason}) @ {price:.2f} | PnL: {s}{pnl:.2f}$", pnl)
         self.pos = None
         self._last_trade = time.time()
 
-    # ── Event Handlers ───────────────────────────────────────
+    # ── Events ───────────────────────────────────────────
 
     async def on_candle(self, candle: Candle):
-        """Mum kapandığında çağrılır. Ana strateji mantığı burada."""
+        """Her mum kapanışında çağrılır."""
         async with self._lock:
             self.candles.append(candle)
             if len(self.candles) > self.cfg.max_candles:
                 self.candles.pop(0)
-
             self.price = candle.c
-            self._analyze()
+            self._update_trend()
 
             if not self.trend:
+                log.debug(f"Trend yok (mumlar: {len(self.candles)}/{self.cfg.period})")
                 return
 
-            # 1) Pozisyon varsa çıkış kontrolü
+            # Pozisyon varsa: çıkış kontrolü
             if self.pos:
-                reason = self._should_exit(candle.c)
+                reason = self._check_exit(candle.c)
                 if reason:
                     await self._close(candle.c, reason)
-                # Çıkış olmasa bile, aynı mumda yeni pozisyon açma
-                return
+                return  # Bu mumda yeni pozisyon açma
 
-            # 2) Pozisyon yoksa giriş kontrolü
-            if self._can_trade():
-                sig = self._signal(candle.c)
-                if sig:
-                    log.info(f"SİNYAL: {sig} @ {candle.c:.2f} | H={self.trend['high']:.2f} L={self.trend['low']:.2f}")
-                    await self._open(sig, candle.c)
+            # Pozisyon yoksa: giriş kontrolü
+            sig = self._check_signal(candle.c)
+            if sig:
+                log.info(f"SİNYAL: {sig} | price={candle.c:.2f} H={self.trend['high']:.2f} L={self.trend['low']:.2f}")
+                await self._open(sig, candle.c)
+            else:
+                log.debug(f"Sinyal yok | price={candle.c:.2f} H={self.trend['high']:.2f} L={self.trend['low']:.2f} thr={self.cfg.threshold}")
 
     async def on_tick(self, price: float):
-        """Her fiyat tick'inde çağrılır. SADECE stop-loss kontrolü."""
+        """Her fiyat tick'inde: SADECE SL kontrolü."""
         if not self.running:
             return
         self.price = price
-
         if self.pos and not self._lock.locked():
-            hit = False
-            if self.pos.side == "long" and price <= self.pos.sl:
-                hit = True
-            elif self.pos.side == "short" and price >= self.pos.sl:
-                hit = True
+            hit = (self.pos.side == "long" and price <= self.pos.sl) or \
+                  (self.pos.side == "short" and price >= self.pos.sl)
             if hit:
                 async with self._lock:
-                    if self.pos:  # double check
+                    if self.pos:
                         await self._close(price, "STOP LOSS (RT)")
 
-    # ── State ────────────────────────────────────────────────
+    # ── State ────────────────────────────────────────────
 
     def state(self) -> dict:
         wr = round(self.wins / self.trades * 100, 1) if self.trades > 0 else 0
-
+        cd = max(0, self.cfg.cooldown - (time.time() - self._last_trade))
         return {
             "running": self.running,
             "mode": self.cfg.mode,
             "price": self.price,
             "trend": self.trend,
-            "pos": self.pos.to_dict(self.price) if self.pos else None,
-            "candles": [{"o":c.o,"h":c.h,"l":c.l,"c":c.c,"t":c.t} for c in self.candles[-80:]],
+            "pos": self.pos.as_dict(self.price) if self.pos else None,
+            "candles": [{"o": c.o, "h": c.h, "l": c.l, "c": c.c, "t": c.t} for c in self.candles[-80:]],
             "live_candle": self.live_candle,
-            "stats": {
-                "trades": self.trades, "wins": self.wins, "losses": self.losses,
-                "pnl": round(self.total_pnl, 4), "wr": wr,
-            },
+            "stats": {"trades": self.trades, "wins": self.wins, "losses": self.losses, "pnl": round(self.total_pnl, 4), "wr": wr},
             "log": self.trade_log[-50:],
             "cfg": asdict(self.cfg),
-            "cooldown": round(self._cooldown_left(), 1),
+            "cooldown": round(cd, 1),
         }

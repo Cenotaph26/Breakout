@@ -2,41 +2,39 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>TrendBreak</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#06080d;--bg2:#0c1017;--sf:#111620;--sf2:#171d2a;--bd:#1a2035;--bd2:#252d42;--tx:#e8ecf4;--tx2:#7a8599;--tx3:#4a5568;--grn:#00e676;--red:#ff1744;--cyn:#00e5ff;--ylw:#ffd740;--blu:#448aff;--mono:'IBM Plex Mono',monospace;--sans:'DM Sans',sans-serif}
 *{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#06080d;--bg2:#0c1017;--sf:#111620;--bd:#1a2035;--tx:#e8ecf4;--tx2:#7a8599;--tx3:#4a5568;--grn:#00e676;--red:#ff1744;--cyn:#00e5ff;--ylw:#ffd740;--blu:#448aff;--mono:'IBM Plex Mono',monospace;--sans:'DM Sans',sans-serif}
 body{background:var(--bg);color:var(--tx);font-family:var(--mono);font-size:12px;height:100vh;overflow:hidden}
-::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:2px}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:#252d42;border-radius:2px}
 
 header{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:var(--bg2);border-bottom:1px solid var(--bd)}
 .logo{font-family:var(--sans);font-size:15px;font-weight:700}.logo em{font-style:normal;color:var(--cyn)}
 .hdr{display:flex;gap:10px;align-items:center}
-.pill{padding:3px 8px;border-radius:3px;font-size:10px;font-weight:600;letter-spacing:.5px}
-.pill-on{background:rgba(0,230,118,.12);color:var(--grn);border:1px solid rgba(0,230,118,.2)}
-.pill-off{background:rgba(255,23,68,.12);color:var(--red);border:1px solid rgba(255,23,68,.2)}
-.pill-live{background:rgba(255,23,68,.12);color:var(--red);border:1px solid rgba(255,23,68,.25)}
-.pill-sim{background:rgba(0,229,255,.1);color:var(--cyn);border:1px solid rgba(0,229,255,.2)}
-.dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:4px}
+.pill{padding:3px 8px;border-radius:3px;font-size:10px;font-weight:600;letter-spacing:.5px;display:inline-flex;align-items:center;gap:4px}
+.p-on{background:rgba(0,230,118,.12);color:var(--grn);border:1px solid rgba(0,230,118,.2)}
+.p-off{background:rgba(255,23,68,.12);color:var(--red);border:1px solid rgba(255,23,68,.2)}
+.p-live{background:rgba(255,23,68,.12);color:var(--red);border:1px solid rgba(255,23,68,.25)}
+.p-sim{background:rgba(0,229,255,.1);color:var(--cyn);border:1px solid rgba(0,229,255,.2)}
+.dot{width:6px;height:6px;border-radius:50%;display:inline-block}
 .dot-on{background:var(--grn);box-shadow:0 0 6px var(--grn)}
 .dot-off{background:var(--red)}
 
 .grid{display:grid;height:calc(100vh - 40px);grid-template-columns:240px 1fr 260px}
-.col{display:flex;flex-direction:column;overflow-y:auto}
-.left{background:var(--bg2);border-right:1px solid var(--bd)}
-.right{background:var(--bg2);border-left:1px solid var(--bd)}
+.left,.right{background:var(--bg2);display:flex;flex-direction:column;overflow-y:auto}
+.left{border-right:1px solid var(--bd)}.right{border-left:1px solid var(--bd)}
 .center{background:var(--bg);display:flex;flex-direction:column;overflow:hidden}
 
 .sec{padding:12px;border-bottom:1px solid var(--bd)}
 .sec-t{font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;font-weight:600}
-.row{display:flex;justify-content:space-between;padding:2px 0}
-.row .k{color:var(--tx2);font-size:11px}.row .v{font-weight:600}
+.row{display:flex;justify-content:space-between;padding:2px 0}.row .k{color:var(--tx2);font-size:11px}.row .v{font-weight:600}
 
 .price-box{text-align:center;padding:16px 12px}
-.price-big{font-family:var(--sans);font-size:28px;font-weight:700;transition:color .2s}
-.price-big.up{color:var(--grn)}.price-big.dn{color:var(--red)}.price-big.fl{color:var(--tx)}
+.price-big{font-family:var(--sans);font-size:28px;font-weight:700;transition:color .15s}
+.price-big.up{color:var(--grn)}.price-big.dn{color:var(--red)}
 .price-sub{font-size:10px;color:var(--tx2);margin-top:2px}
 
 .pos-card{background:var(--sf);border-radius:5px;padding:10px;border-left:3px solid var(--bd)}
@@ -44,29 +42,26 @@ header{height:40px;display:flex;align-items:center;justify-content:space-between
 .pos-head{display:flex;justify-content:space-between;margin-bottom:6px}
 .pos-side{font-family:var(--sans);font-size:13px;font-weight:700}
 .pos-side.long{color:var(--grn)}.pos-side.short{color:var(--red)}
-.pos-pnl{font-weight:700}
 .pos-empty{color:var(--tx3);text-align:center;padding:12px 0;font-size:11px}
 
 .btns{display:flex;gap:6px;padding:12px;margin-top:auto}
-.btn{flex:1;padding:8px;border:none;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:11px;font-weight:600;text-transform:uppercase}
+.btn{flex:1;padding:9px;border:none;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:11px;font-weight:600;text-transform:uppercase;transition:all .15s}
 .btn:hover{filter:brightness(1.2)}.btn:active{transform:scale(.98)}
-.btn-r{background:#d50000;color:#fff}.btn-g{background:var(--sf2);color:var(--tx);border:1px solid var(--bd2)}
+.btn-r{background:#d50000;color:#fff}.btn-g{background:#171d2a;color:var(--tx);border:1px solid #252d42}
 
 .ch-top{height:32px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:var(--bg2);border-bottom:1px solid var(--bd);font-size:11px}
 .ch-top b{font-family:var(--sans);font-size:13px}
 .ch-area{flex:1;position:relative}
 canvas{display:block;width:100%;height:100%}
 .trend-bar{height:28px;display:flex;align-items:center;gap:10px;padding:0 12px;background:var(--bg2);border-top:1px solid var(--bd);font-size:11px}
-.trend-tag{padding:2px 6px;border-radius:3px;font-weight:600;font-size:9px;text-transform:uppercase;letter-spacing:.5px}
-.trend-tag.up{background:rgba(0,230,118,.12);color:var(--grn)}.trend-tag.down{background:rgba(255,23,68,.12);color:var(--red)}.trend-tag.sideways{background:rgba(255,215,64,.12);color:var(--ylw)}
+.tt{padding:2px 6px;border-radius:3px;font-weight:600;font-size:9px;text-transform:uppercase}
+.tt.up{background:rgba(0,230,118,.12);color:var(--grn)}.tt.down{background:rgba(255,23,68,.12);color:var(--red)}.tt.sideways{background:rgba(255,215,64,.12);color:var(--ylw)}
 .stat-bar{display:flex;height:44px;background:var(--bg2);border-top:1px solid var(--bd)}
-.stat-cell{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-right:1px solid var(--bd)}
-.stat-cell:last-child{border-right:none}
-.stat-v{font-family:var(--sans);font-size:14px;font-weight:700}
-.stat-l{font-size:8px;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-top:1px}
+.sc{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-right:1px solid var(--bd)}
+.sc:last-child{border-right:none}.sc-v{font-family:var(--sans);font-size:14px;font-weight:700}.sc-l{font-size:8px;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-top:1px}
 
 .tabs{display:flex;height:32px;border-bottom:1px solid var(--bd)}
-.tab{flex:1;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;cursor:pointer;color:var(--tx3);border-bottom:2px solid transparent}
+.tab{flex:1;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;text-transform:uppercase;cursor:pointer;color:var(--tx3);border-bottom:2px solid transparent;transition:all .15s}
 .tab.on{color:var(--cyn);border-bottom-color:var(--cyn)}
 .tp{flex:1;overflow-y:auto;display:none}.tp.on{display:block}
 .le{padding:5px 10px;border-bottom:1px solid var(--bd);font-size:10px;line-height:1.5;word-break:break-word}
@@ -76,65 +71,68 @@ canvas{display:block;width:100%;height:100%}
 .fld label{display:block;font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
 .fld input,.fld select{width:100%;padding:6px 8px;background:var(--sf);border:1px solid var(--bd);border-radius:4px;color:var(--tx);font-family:var(--mono);font-size:12px}
 .fld input:focus,.fld select:focus{outline:none;border-color:var(--cyn)}
-.btn-a{width:100%;padding:8px;background:var(--cyn);color:var(--bg);border:none;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:11px;font-weight:700;text-transform:uppercase}
+.btn-a{width:100%;padding:9px;margin-top:4px;background:var(--cyn);color:var(--bg);border:none;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:11px;font-weight:700;text-transform:uppercase}
+.btn-a:hover{filter:brightness(1.1)}
+
+@media(max-width:1024px){.grid{grid-template-columns:1fr;grid-template-rows:auto 50vh auto}.left{flex-direction:row;flex-wrap:wrap;border-right:none;border-bottom:1px solid var(--bd)}.left .sec{flex:1;min-width:180px}.right{max-height:35vh}}
 </style>
 </head>
 <body>
 <header>
   <div class="logo">TREND<em>BREAK</em></div>
   <div class="hdr">
-    <span id="ws-p" class="pill pill-off"><span class="dot dot-off"></span>Bağlanıyor</span>
-    <span id="mode-p" class="pill pill-sim">SIM</span>
-    <span id="bnc-p" class="pill pill-on" style="display:none"><span class="dot dot-on"></span>Binance</span>
+    <span id="ws-p" class="pill p-off"><span class="dot dot-off"></span> Bağlanıyor</span>
+    <span id="mode-p" class="pill p-sim">SIM</span>
+    <span id="bnc-p" class="pill p-on" style="display:none"><span class="dot dot-on"></span> Binance</span>
   </div>
 </header>
 <div class="grid">
-  <div class="left col">
+  <div class="left">
     <div class="price-box">
-      <div id="price" class="price-big fl">—</div>
+      <div id="price" class="price-big">—</div>
       <div class="price-sub" id="sym">BTCUSDT</div>
     </div>
     <div class="sec"><div class="sec-t">Pozisyon</div><div id="pos"><div class="pos-empty">Pozisyon yok</div></div></div>
     <div class="sec">
       <div class="sec-t">Performans</div>
-      <div class="row"><span class="k">İşlem</span><span class="v" id="s-t">0</span></div>
-      <div class="row"><span class="k">K/K</span><span class="v" id="s-wl">0/0</span></div>
-      <div class="row"><span class="k">Oran</span><span class="v" id="s-wr">0%</span></div>
-      <div class="row"><span class="k">PnL</span><span class="v" id="s-pnl" style="color:var(--grn)">$0</span></div>
-      <div class="row"><span class="k">Cooldown</span><span class="v" id="s-cd" style="color:var(--cyn)">—</span></div>
+      <div class="row"><span class="k">İşlem</span><span class="v" id="st">0</span></div>
+      <div class="row"><span class="k">K/K</span><span class="v" id="swl">0/0</span></div>
+      <div class="row"><span class="k">Oran</span><span class="v" id="swr">0%</span></div>
+      <div class="row"><span class="k">PnL</span><span class="v" id="spnl" style="color:var(--grn)">$0</span></div>
+      <div class="row"><span class="k">Cooldown</span><span class="v" id="scd" style="color:var(--cyn)">—</span></div>
     </div>
     <div class="sec">
-      <div class="sec-t">Ayarlar</div>
-      <div class="row"><span class="k">Mod</span><span class="v" id="c-m">—</span></div>
-      <div class="row"><span class="k">Kaldıraç</span><span class="v" id="c-l">—</span></div>
-      <div class="row"><span class="k">Boyut</span><span class="v" id="c-s">—</span></div>
-      <div class="row"><span class="k">Periyot</span><span class="v" id="c-p">—</span></div>
-      <div class="row"><span class="k">Kırılma</span><span class="v" id="c-b">—</span></div>
-      <div class="row"><span class="k">SL</span><span class="v" id="c-sl">—</span></div>
+      <div class="sec-t">Aktif Ayarlar</div>
+      <div class="row"><span class="k">Mod</span><span class="v" id="cm">—</span></div>
+      <div class="row"><span class="k">Kaldıraç</span><span class="v" id="cl">—</span></div>
+      <div class="row"><span class="k">Boyut</span><span class="v" id="cs">—</span></div>
+      <div class="row"><span class="k">Periyot</span><span class="v" id="cp">—</span></div>
+      <div class="row"><span class="k">Kırılma</span><span class="v" id="cb">—</span></div>
+      <div class="row"><span class="k">SL</span><span class="v" id="csl">—</span></div>
     </div>
     <div class="btns">
-      <button class="btn btn-r" onclick="api('/api/stop')">Durdur</button>
-      <button class="btn btn-g" onclick="api('/api/restart')">Yeniden Başlat</button>
+      <button class="btn btn-r" id="btnStop">DURDUR</button>
+      <button class="btn btn-g" id="btnRestart">YENİDEN BAŞLAT</button>
     </div>
   </div>
   <div class="center">
-    <div class="ch-top"><b id="ch-sym">BTCUSDT</b><span style="color:var(--tx2)" id="ch-info">1m</span></div>
+    <div class="ch-top"><b id="chSym">BTCUSDT</b><span style="color:var(--tx2)" id="chInfo">1m</span></div>
     <div class="ch-area"><canvas id="cv"></canvas></div>
     <div class="trend-bar">
       <span style="color:var(--tx2)">Trend</span>
-      <span class="trend-tag" id="td">—</span>
+      <span class="tt" id="td">—</span>
       <span style="color:var(--tx2)">H:<b id="th" style="color:var(--tx)">—</b></span>
       <span style="color:var(--tx2)">L:<b id="tl" style="color:var(--tx)">—</b></span>
-      <span style="color:var(--tx2)">Güç:<b id="ts" style="color:var(--tx)">—</b></span>
+      <span style="color:var(--tx2)">Güç:<b id="tstr" style="color:var(--tx)">—</b></span>
     </div>
     <div class="stat-bar">
-      <div class="stat-cell"><div class="stat-v" id="bp">—</div><div class="stat-l">Fiyat</div></div>
-      <div class="stat-cell"><div class="stat-v" id="bpnl">$0</div><div class="stat-l">PnL</div></div>
-      <div class="stat-cell"><div class="stat-v" id="bt">0</div><div class="stat-l">İşlem</div></div>
-      <div class="stat-cell"><div class="stat-v" id="bw">0%</div><div class="stat-l">Başarı</div></div>
+      <div class="sc"><div class="sc-v" id="bp">—</div><div class="sc-l">Fiyat</div></div>
+      <div class="sc"><div class="sc-v" id="bpnl">$0</div><div class="sc-l">PnL</div></div>
+      <div class="sc"><div class="sc-v" id="bt">0</div><div class="sc-l">İşlem</div></div>
+      <div class="sc"><div class="sc-v" id="bw">0%</div><div class="sc-l">Başarı</div></div>
     </div>
   </div>
-  <div class="right col">
+  <div class="right">
     <div class="tabs">
       <div class="tab on" data-t="log">Günlük</div>
       <div class="tab" data-t="cfg">Ayarlar</div>
@@ -142,91 +140,152 @@ canvas{display:block;width:100%;height:100%}
     <div class="tp on" id="p-log"><div id="ll"></div></div>
     <div class="tp" id="p-cfg">
       <div class="stg">
-        <div class="fld"><label>Sembol</label><input id="i-s" value="BTCUSDT"></div>
-        <div class="fld"><label>Mod</label><select id="i-m"><option value="live">CANLI</option><option value="sim">SIM</option></select></div>
-        <div class="fld"><label>Ortam</label><select id="i-d"><option value="true">TESTNET</option><option value="false">MAINNET</option></select></div>
-        <div class="fld"><label>Boyut (USDT)</label><input id="i-sz" type="number" value="100"></div>
-        <div class="fld"><label>Kaldıraç</label><input id="i-lv" type="number" value="5"></div>
-        <div class="fld"><label>Periyot</label><input id="i-tp" type="number" value="4"></div>
-        <div class="fld"><label>Kırılma (%)</label><input id="i-bt" type="number" value="0.05" step="0.01"></div>
-        <div class="fld"><label>SL (%)</label><input id="i-sl" type="number" value="0.5" step="0.1"></div>
-        <div class="fld"><label>Cooldown (sn)</label><input id="i-cd" type="number" value="15"></div>
-        <button class="btn-a" onclick="applyCfg()">Uygula & Yeniden Başlat</button>
+        <div class="fld"><label>Sembol</label><input id="iSym" value="BTCUSDT"></div>
+        <div class="fld"><label>Mod</label><select id="iMode"><option value="live">CANLI</option><option value="sim">SIM</option></select></div>
+        <div class="fld"><label>Ortam</label><select id="iDemo"><option value="true">TESTNET</option><option value="false">MAINNET</option></select></div>
+        <div class="fld"><label>Boyut (USDT)</label><input id="iSz" type="number" value="100"></div>
+        <div class="fld"><label>Kaldıraç</label><input id="iLv" type="number" value="5"></div>
+        <div class="fld"><label>Periyot</label><input id="iTp" type="number" value="5"></div>
+        <div class="fld"><label>Kırılma (%)</label><input id="iBt" type="number" value="0.05" step="0.01"></div>
+        <div class="fld"><label>SL (%)</label><input id="iSl" type="number" value="0.5" step="0.1"></div>
+        <div class="fld"><label>Cooldown (sn)</label><input id="iCd" type="number" value="15"></div>
+        <button class="btn-a" id="btnApply">UYGULA & YENİDEN BAŞLAT</button>
       </div>
     </div>
   </div>
 </div>
 <script>
-const $=id=>document.getElementById(id),F=(v,d=2)=>v!=null?v.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}):'—';
-let S={},candles=[],lc=null,pp=0,lts=0,raf=null;
+const $=id=>document.getElementById(id);
+const F=(v,d=2)=>v!=null?v.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}):'—';
 
-// Tabs
-document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+let S={},candles=[],lc=null,prevP=0,lastTs=0,raf=null;
+
+// ── Tabs ──
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
   document.querySelectorAll('.tp').forEach(x=>x.classList.remove('on'));
   t.classList.add('on');$('p-'+t.dataset.t).classList.add('on');
+}));
+
+// ── Buttons ──
+$('btnStop').addEventListener('click', async ()=>{
+  $('btnStop').textContent='Durduruluyor...';
+  try{await fetch('/api/stop',{method:'POST'})}catch(e){console.error(e)}
+  $('btnStop').textContent='DURDUR';
+});
+$('btnRestart').addEventListener('click', async ()=>{
+  $('btnRestart').textContent='Başlatılıyor...';
+  try{await fetch('/api/restart',{method:'POST'})}catch(e){console.error(e)}
+  $('btnRestart').textContent='YENİDEN BAŞLAT';
+});
+$('btnApply').addEventListener('click', async ()=>{
+  $('btnApply').textContent='Uygulanıyor...';
+  const body={
+    symbol:$('iSym').value.toUpperCase(), mode:$('iMode').value, demo:$('iDemo').value,
+    size_usdt:+$('iSz').value, leverage:+$('iLv').value, period:+$('iTp').value,
+    threshold:+$('iBt').value, sl_pct:+$('iSl').value, cooldown:+$('iCd').value,
+  };
+  try{await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})}catch(e){console.error(e)}
+  $('btnApply').textContent='UYGULA & YENİDEN BAŞLAT';
 });
 
-// WS
+// ── WebSocket ──
 let ws,wr=0;
 function connect(){
-  const p=location.protocol==='https:'?'wss':'ws';
-  ws=new WebSocket(`${p}://${location.host}/ws`);
-  ws.onopen=()=>{wr=0;$('ws-p').className='pill pill-on';$('ws-p').innerHTML='<span class="dot dot-on"></span>Bağlı'};
-  ws.onclose=()=>{$('ws-p').className='pill pill-off';$('ws-p').innerHTML='<span class="dot dot-off"></span>Koptu';setTimeout(connect,Math.min(1e3*(++wr),8e3))};
+  const proto=location.protocol==='https:'?'wss':'ws';
+  ws=new WebSocket(proto+'://'+location.host+'/ws');
+  ws.onopen=()=>{wr=0;$('ws-p').className='pill p-on';$('ws-p').innerHTML='<span class="dot dot-on"></span> Bağlı'};
+  ws.onclose=()=>{$('ws-p').className='pill p-off';$('ws-p').innerHTML='<span class="dot dot-off"></span> Koptu';setTimeout(connect,Math.min(1e3*(++wr),8e3))};
   ws.onerror=()=>ws.close();
-  ws.onmessage=e=>{try{const d=JSON.parse(e.data);if(d.ping)return;if(d.candles)candles=d.candles;if(d.live_candle!==undefined)lc=d.live_candle;if(d.price!==undefined){pp=S.price||d.price}Object.assign(S,d);render()}catch(e){}};
+  ws.onmessage=e=>{
+    try{
+      const d=JSON.parse(e.data);
+      if(d.ping)return;
+      if(d.candles)candles=d.candles;
+      if(d.live_candle!==undefined)lc=d.live_candle;
+      if(d.price!==undefined)prevP=S.price||d.price;
+      Object.assign(S,d);
+      render();
+    }catch(err){console.error('ws:',err)}
+  };
 }
 connect();
 
-async function api(u,b){try{await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined})}catch(e){}}
-function applyCfg(){api('/api/config',{symbol:$('i-s').value.toUpperCase(),mode:$('i-m').value,demo:$('i-d').value,size_usdt:+$('i-sz').value,leverage:+$('i-lv').value,period:+$('i-tp').value,threshold:+$('i-bt').value,sl_pct:+$('i-sl').value,cooldown:+$('i-cd').value})}
-
+// ── Render ──
 function render(){
-  const pr=S.price||0,dir=pr>pp?'up':pr<pp?'dn':'fl';
-  $('price').textContent=F(pr);$('price').className='price-big '+dir;
+  const pr=S.price||0;
+  $('price').textContent=F(pr);
+  $('price').className='price-big '+(pr>prevP?'up':pr<prevP?'dn':'');
   $('sym').textContent=S.cfg?.symbol||'BTCUSDT';
-  $('ch-sym').textContent=S.cfg?.symbol||'';
+  $('chSym').textContent=S.cfg?.symbol||'';
   $('bp').textContent=F(pr);
+  $('chInfo').textContent='1m · '+candles.length+' mum';
 
   const m=S.mode||'sim';
-  $('mode-p').textContent=m==='live'?'CANLI':'SIM';$('mode-p').className='pill '+(m==='live'?'pill-live':'pill-sim');
+  $('mode-p').textContent=m==='live'?'CANLI':'SIM';
+  $('mode-p').className='pill '+(m==='live'?'p-live':'p-sim');
   const bb=$('bnc-p');
-  if(m==='live'){bb.style.display='';bb.className='pill '+(S.bnc_ok?'pill-on':'pill-off');bb.innerHTML='<span class="dot dot-'+(S.bnc_ok?'on':'off')+'"></span>Binance'}else bb.style.display='none';
+  if(m==='live'){bb.style.display='';bb.className='pill '+(S.bnc_ok?'p-on':'p-off');bb.innerHTML='<span class="dot dot-'+(S.bnc_ok?'on':'off')+'"></span> Binance'}
+  else bb.style.display='none';
 
   // Position
-  const pa=$('pos');
   if(S.pos){
     const p=S.pos,pnl=p.pnl||0;
-    pa.innerHTML=`<div class="pos-card ${p.side}"><div class="pos-head"><span class="pos-side ${p.side}">${p.side.toUpperCase()}</span><span class="pos-pnl" style="color:${pnl>=0?'var(--grn)':'var(--red)'}">${pnl>=0?'+':''}${F(pnl,3)}$</span></div><div class="row"><span class="k">Giriş</span><span class="v">${F(p.entry)}</span></div><div class="row"><span class="k">Qty</span><span class="v">${p.qty}</span></div><div class="row"><span class="k">SL</span><span class="v" style="color:var(--red)">${F(p.sl)}</span></div></div>`;
-  }else pa.innerHTML='<div class="pos-empty">Pozisyon yok</div>';
+    $('pos').innerHTML=`<div class="pos-card ${p.side}"><div class="pos-head"><span class="pos-side ${p.side}">${p.side.toUpperCase()}</span><span style="font-weight:700;color:${pnl>=0?'var(--grn)':'var(--red)'}">${pnl>=0?'+':''}${F(pnl,3)}$</span></div><div class="row"><span class="k">Giriş</span><span class="v">${F(p.entry)}</span></div><div class="row"><span class="k">Qty</span><span class="v">${p.qty}</span></div><div class="row"><span class="k">SL</span><span class="v" style="color:var(--red)">${F(p.sl)}</span></div></div>`;
+  }else $('pos').innerHTML='<div class="pos-empty">Pozisyon yok</div>';
 
+  // Stats
   const st=S.stats||{};
-  $('s-t').textContent=st.trades||0;$('s-wl').textContent=`${st.wins||0}/${st.losses||0}`;$('s-wr').textContent=(st.wr||0)+'%';
-  const pnl=st.pnl||0;$('s-pnl').textContent=`${pnl>=0?'+':''}$${F(Math.abs(pnl))}`;$('s-pnl').style.color=pnl>=0?'var(--grn)':'var(--red)';
-  $('s-cd').textContent=(S.cooldown||0)>0?(S.cooldown).toFixed(0)+'s':'Hazır';
-  $('bpnl').textContent=`${pnl>=0?'+':''}$${F(Math.abs(pnl))}`;$('bpnl').style.color=pnl>=0?'var(--grn)':'var(--red)';
-  $('bt').textContent=st.trades||0;$('bw').textContent=(st.wr||0)+'%';
+  $('st').textContent=st.trades||0;
+  $('swl').textContent=(st.wins||0)+'/'+(st.losses||0);
+  $('swr').textContent=(st.wr||0)+'%';
+  const pnl=st.pnl||0;
+  $('spnl').textContent=(pnl>=0?'+':'')+F(Math.abs(pnl))+'$';
+  $('spnl').style.color=pnl>=0?'var(--grn)':'var(--red)';
+  $('scd').textContent=(S.cooldown||0)>0?Math.ceil(S.cooldown)+'s':'Hazır';
+  $('bpnl').textContent=(pnl>=0?'+':'')+'$'+F(Math.abs(pnl));
+  $('bpnl').style.color=pnl>=0?'var(--grn)':'var(--red)';
+  $('bt').textContent=st.trades||0;
+  $('bw').textContent=(st.wr||0)+'%';
 
-  const cfg=S.cfg||{};
-  $('c-m').textContent=(cfg.mode||'sim').toUpperCase();$('c-l').textContent=(cfg.leverage||1)+'x';
-  $('c-s').textContent=(cfg.size_usdt||0)+' USDT';$('c-p').textContent=(cfg.period||4)+' mum';
-  $('c-b').textContent=((cfg.threshold||0)*100).toFixed(3)+'%';$('c-sl').textContent=((cfg.sl_pct||0)*100).toFixed(2)+'%';
-  $('ch-info').textContent=`1m · ${candles.length} mum`;
+  // Config
+  const c=S.cfg||{};
+  $('cm').textContent=(c.mode||'sim').toUpperCase();
+  $('cl').textContent=(c.leverage||1)+'x';
+  $('cs').textContent=(c.size_usdt||0)+' USDT';
+  $('cp').textContent=(c.period||5)+' mum';
+  $('cb').textContent=((c.threshold||0)*100).toFixed(3)+'%';
+  $('csl').textContent=((c.sl_pct||0)*100).toFixed(2)+'%';
 
+  // Trend
   const tr=S.trend;
   if(tr){
-    const td=$('td');td.textContent={up:'YÜKSELİŞ',down:'DÜŞÜŞ',sideways:'YATAY'}[tr.dir]||'—';td.className='trend-tag '+(tr.dir||'');
-    $('th').textContent=F(tr.high);$('tl').textContent=F(tr.low);$('ts').textContent=((tr.strength||0)*100).toFixed(0)+'%';
+    const el=$('td');
+    el.textContent={up:'YÜKSELİŞ',down:'DÜŞÜŞ',sideways:'YATAY'}[tr.dir]||'—';
+    el.className='tt '+(tr.dir||'');
+    $('th').textContent=F(tr.high);
+    $('tl').textContent=F(tr.low);
+    $('tstr').textContent=((tr.strength||0)*100).toFixed(0)+'%';
   }
 
-  if(S.log&&S.log.length){const nm=S.log[S.log.length-1].ts;if(nm!==lts){let h='';for(const l of[...S.log].reverse())h+=`<div class="le ${l.type}"><span class="t">${l.time}</span><span class="m">${l.msg.replace(/</g,'&lt;')}</span></div>`;$('ll').innerHTML=h;lts=nm}}
+  // Trade log
+  if(S.log&&S.log.length){
+    const last=S.log[S.log.length-1].ts;
+    if(last!==lastTs){
+      let h='';
+      for(const l of[...S.log].reverse()){
+        h+='<div class="le '+l.type+'"><span class="t">'+l.time+'</span><span class="m">'+l.msg.replace(/</g,'&lt;')+'</span></div>';
+      }
+      $('ll').innerHTML=h;
+      lastTs=last;
+    }
+  }
 
-  pp=pr;
+  prevP=pr;
   if(!raf)raf=requestAnimationFrame(()=>{raf=null;draw()});
 }
 
-// CHART
+// ── Chart ──
 const cv=$('cv'),cx=cv.getContext('2d');
 function draw(){
   if(!candles.length)return;
@@ -235,45 +294,58 @@ function draw(){
   cx.setTransform(dpr,0,0,dpr,0,0);
 
   const P={t:8,r:56,b:16,l:4},cW=W-P.l-P.r,cH=H-P.t-P.b;
-  const d=[...candles];if(lc)d.push(lc);
-  const n=d.length,gap=1.5,cw=Math.max(3,Math.min(14,(cW/n)-gap));
+  const all=[...candles];if(lc)all.push(lc);
+  const n=all.length,gap=1.5,cw=Math.max(3,Math.min(14,(cW/n)-gap));
 
-  let hi=-1/0,lo=1/0;for(const c of d){if(c.h>hi)hi=c.h;if(c.l<lo)lo=c.l}
+  let hi=-1/0,lo=1/0;
+  for(const c of all){if(c.h>hi)hi=c.h;if(c.l<lo)lo=c.l}
   const rng=hi-lo||1,mg=rng*.05;hi+=mg;lo-=mg;
-  const sy=cH/(hi-lo),Y=v=>P.t+(hi-v)*sy;
+  const scY=cH/(hi-lo),Y=v=>P.t+(hi-v)*scY;
   const offX=cW-n*(cw+gap);
 
+  // Clear
   cx.fillStyle='#06080d';cx.fillRect(0,0,W,H);
 
   // Grid
-  cx.strokeStyle='#111825';cx.lineWidth=.5;cx.font='10px IBM Plex Mono';cx.textAlign='right';
-  for(let i=0;i<=6;i++){const y=P.t+i*cH/6,pv=hi-i*(hi-lo)/6;cx.beginPath();cx.moveTo(P.l,y);cx.lineTo(W-P.r,y);cx.stroke();cx.fillStyle='#4a5568';cx.fillText(pv.toFixed(1),W-3,y+3)}
+  cx.strokeStyle='#111825';cx.lineWidth=.5;
+  cx.font='10px IBM Plex Mono';cx.textAlign='right';
+  for(let i=0;i<=6;i++){
+    const y=P.t+i*cH/6,pv=hi-i*(hi-lo)/6;
+    cx.beginPath();cx.moveTo(P.l,y);cx.lineTo(W-P.r,y);cx.stroke();
+    cx.fillStyle='#4a5568';cx.fillText(pv.toFixed(1),W-3,y+3);
+  }
 
   // Trend lines
   const tr=S.trend;
   if(tr){
     cx.save();cx.setLineDash([5,4]);cx.lineWidth=1;
-    cx.strokeStyle='rgba(255,23,68,.25)';let y=Y(tr.high);cx.beginPath();cx.moveTo(P.l,y);cx.lineTo(W-P.r,y);cx.stroke();
-    cx.fillStyle='rgba(255,23,68,.4)';cx.font='9px monospace';cx.textAlign='left';cx.fillText('R',P.l+3,y-3);
-    cx.strokeStyle='rgba(0,230,118,.25)';y=Y(tr.low);cx.beginPath();cx.moveTo(P.l,y);cx.lineTo(W-P.r,y);cx.stroke();
-    cx.fillStyle='rgba(0,230,118,.4)';cx.fillText('S',P.l+3,y+10);
+    cx.strokeStyle='rgba(255,23,68,.25)';
+    let y=Y(tr.high);cx.beginPath();cx.moveTo(P.l,y);cx.lineTo(W-P.r,y);cx.stroke();
+    cx.fillStyle='rgba(255,23,68,.4)';cx.font='9px monospace';cx.textAlign='left';
+    cx.fillText('R '+tr.high.toFixed(1),P.l+3,y-3);
+    cx.strokeStyle='rgba(0,230,118,.25)';
+    y=Y(tr.low);cx.beginPath();cx.moveTo(P.l,y);cx.lineTo(W-P.r,y);cx.stroke();
+    cx.fillStyle='rgba(0,230,118,.4)';cx.fillText('S '+tr.low.toFixed(1),P.l+3,y+10);
     cx.restore();
   }
 
   // Position lines
   if(S.pos){
     cx.save();cx.setLineDash([3,3]);cx.lineWidth=1;
-    cx.strokeStyle='rgba(68,138,255,.5)';let y=Y(S.pos.entry);cx.beginPath();cx.moveTo(P.l,y);cx.lineTo(W-P.r,y);cx.stroke();
-    cx.fillStyle='#448aff';cx.font='9px monospace';cx.textAlign='left';cx.fillText('▸ '+S.pos.entry.toFixed(1),P.l+2,y-3);
-    cx.strokeStyle='rgba(255,23,68,.4)';y=Y(S.pos.sl);cx.beginPath();cx.moveTo(P.l,y);cx.lineTo(W-P.r,y);cx.stroke();
-    cx.fillStyle='#ff1744';cx.fillText('✕ SL',P.l+2,y-3);
+    cx.strokeStyle='rgba(68,138,255,.5)';
+    let y=Y(S.pos.entry);cx.beginPath();cx.moveTo(P.l,y);cx.lineTo(W-P.r,y);cx.stroke();
+    cx.fillStyle='#448aff';cx.font='9px monospace';cx.textAlign='left';
+    cx.fillText('▸ ENTRY '+S.pos.entry.toFixed(1),P.l+2,y-3);
+    cx.strokeStyle='rgba(255,23,68,.4)';
+    y=Y(S.pos.sl);cx.beginPath();cx.moveTo(P.l,y);cx.lineTo(W-P.r,y);cx.stroke();
+    cx.fillStyle='#ff1744';cx.fillText('✕ SL '+S.pos.sl.toFixed(1),P.l+2,y-3);
     cx.restore();
   }
 
   // Candles
   cx.setLineDash([]);
   for(let i=0;i<n;i++){
-    const c=d[i],x=P.l+offX+i*(cw+gap),bull=c.c>=c.o,isLive=lc&&i===n-1;
+    const c=all[i],x=P.l+offX+i*(cw+gap),bull=c.c>=c.o,live=lc&&i===n-1;
     const col=bull?'#00c853':'#ff1744';
     // Wick
     cx.strokeStyle=bull?'rgba(0,200,83,.7)':'rgba(255,23,68,.7)';cx.lineWidth=1;
@@ -281,17 +353,22 @@ function draw(){
     // Body
     const bT=Y(Math.max(c.o,c.c)),bB=Y(Math.min(c.o,c.c)),bH=Math.max(1,bB-bT);
     cx.fillStyle=col;cx.fillRect(x,bT,cw,bH);
-    if(isLive){cx.save();cx.shadowColor=col;cx.shadowBlur=6;cx.fillRect(x,bT,cw,bH);cx.shadowBlur=0;cx.strokeStyle=bull?'rgba(0,230,118,.5)':'rgba(255,23,68,.5)';cx.lineWidth=1.5;cx.strokeRect(x-.5,bT-.5,cw+1,bH+1);cx.restore()}
+    // Live glow
+    if(live){cx.save();cx.shadowColor=col;cx.shadowBlur=6;cx.fillRect(x,bT,cw,bH);cx.shadowBlur=0;cx.strokeStyle=bull?'rgba(0,230,118,.5)':'rgba(255,23,68,.5)';cx.lineWidth=1.5;cx.strokeRect(x,bT,cw,bH);cx.restore()}
   }
 
   // Price line + label
   const cp=S.price;
   if(cp&&cp>=lo&&cp<=hi){
-    const y=Y(cp);cx.setLineDash([2,2]);cx.strokeStyle='#00e5ff';cx.lineWidth=1;
+    const y=Y(cp);
+    cx.setLineDash([2,2]);cx.strokeStyle='#00e5ff';cx.lineWidth=1;
     cx.beginPath();cx.moveTo(P.l,y);cx.lineTo(W-P.r,y);cx.stroke();cx.setLineDash([]);
-    cx.fillStyle='#00e5ff';cx.beginPath();const lx=W-P.r;
-    cx.roundRect(lx,y-9,52,18,3);cx.fill();
-    cx.fillStyle='#06080d';cx.font='bold 10px monospace';cx.textAlign='center';cx.fillText(cp.toFixed(1),lx+26,y+3);
+    // Label
+    const lx=W-P.r,lw=52,lh=16;
+    cx.fillStyle='#00e5ff';
+    cx.beginPath();cx.roundRect(lx,y-lh/2,lw,lh,3);cx.fill();
+    cx.fillStyle='#06080d';cx.font='bold 10px IBM Plex Mono';cx.textAlign='center';
+    cx.fillText(cp.toFixed(1),lx+lw/2,y+3.5);
   }
 }
 window.addEventListener('resize',()=>{if(!raf)raf=requestAnimationFrame(()=>{raf=null;draw()})});

@@ -132,6 +132,10 @@ async def index():
 @app.get("/api/state")
 async def api_state(): return get_state()
 
+@app.get("/api/health")
+async def api_health():
+    return {"ok": True, "running": bool(bot and bot.running), "bnc_ok": bnc_ok}
+
 @app.post("/api/stop")
 async def api_stop(): await stop_bot(); return {"ok":True}
 

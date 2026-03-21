@@ -185,6 +185,7 @@ async def _rest_loop():
                     logger.info(f"[REST] KLINE CLOSED C={c['close']:.2f}")
                 elif not c["closed"] and c["ts"] == candles[-1]["ts"]:
                     state.push_candle(c, is_closed=False)
+                    logger.debug(f"[REST] tick C={c['close']:.2f}")
         except Exception as e:
             logger.warning(f"[REST] klines hatası: {e}")
 
@@ -205,22 +206,125 @@ async def _rest_loop():
                 pass
 
 
+async def _tv_ws_loop():
+    """
+    TradingView WebSocket alternatif stream.
+    wss://data.tradingview.com/socket.io/websocket
+    Protokol: ~m~LEN~m~JSON mesajları, unauthorized_user_token ile çalışır.
+    """
+    global _last_closed_ts, _ws_connected
+    import re as _re
+
+    def _tv_encode(func, args):
+        msg = json.dumps({'m': func, 'p': args}, separators=(',', ''))
+        return f'~m~{len(msg)}~m~{msg}'
+
+    def _tv_decode(raw):
+        parts = _re.split(r'~m~\d+~m~', raw)
+        msgs = []
+        for p in parts:
+            p = p.strip()
+            if p:
+                try: msgs.append(json.loads(p))
+                except: pass
+        return msgs
+
+    import random, string as _string
+    def _rid(n=10): return ''.join(random.choices(_string.ascii_lowercase+_string.digits, k=n))
+
+    url = 'wss://data.tradingview.com/socket.io/websocket'
+    cs = 'cs_' + _rid()
+    sym = 'BINANCE:ETHUSDT.P'
+    headers = [
+        ('Origin', 'https://data.tradingview.com'),
+        ('User-Agent', 'Mozilla/5.0 (compatible; TradingBot/1.0)'),
+    ]
+    try:
+        logger.info('[TV] TradingView WS bağlanıyor...')
+        async with websockets.connect(url, additional_headers=headers,
+                                      open_timeout=10, ping_interval=None) as ws:
+            _ws_connected = True
+            logger.info('[TV] TradingView WS bağlandı ✓')
+
+            # Protokol handshake
+            await ws.send(_tv_encode('set_auth_token', ['unauthorized_user_token']))
+            await ws.send(_tv_encode('chart_create_session', [cs, '']))
+            resolve_str = json.dumps({'symbol': sym, 'adjustment': 'splits'})
+            await ws.send(_tv_encode('resolve_symbol', [cs, 'sds1', '='+resolve_str]))
+            await ws.send(_tv_encode('create_series', [cs, 's1', 's1', 'sds1', '15', 500]))
+
+            async for raw in ws:
+                # Keepalive ping
+                if raw.startswith('~h~'):
+                    await ws.send(raw)
+                    continue
+                for m in _tv_decode(raw):
+                    mtype = m.get('m', '')
+                    p = m.get('p', [])
+
+                    # timescale_update veya du → kline verisi
+                    if mtype in ('timescale_update', 'du') and len(p) >= 2 and isinstance(p[1], dict):
+                        series = p[1].get('s1', {})
+                        bars = series.get('s', [])
+                        ns = series.get('ns', {})
+                        # ns.d → yeni gelen barlar (incremental)
+                        new_bars = ns.get('d', '') if isinstance(ns, dict) else ''
+                        
+                        all_bars = bars if bars else []
+                        for b in all_bars:
+                            v = b.get('v', [])
+                            if len(v) < 5: continue
+                            now_ms = int(time.time() * 1000)
+                            ts_ms  = int(v[0]) * 1000
+                            # 15dk = 900000ms
+                            close_ts_ms = ts_ms + 900000
+                            is_closed   = now_ms >= close_ts_ms
+                            c = {
+                                'ts': ts_ms, 'open': v[1], 'high': v[2],
+                                'low': v[3], 'close': v[4], 'volume': v[5] if len(v)>5 else 0,
+                                'close_ts': close_ts_ms, 'closed': is_closed,
+                            }
+                            if is_closed and c['ts'] > _last_closed_ts:
+                                _last_closed_ts = c['ts']
+                                state.push_candle(c, is_closed=True)
+                                logger.info(f"[TV] KLINE CLOSED C={c['close']:.2f}")
+                            elif not is_closed and (not _last_closed_ts or c['ts'] >= _last_closed_ts):
+                                state.push_candle(c, is_closed=False)
+
+                    # Canlı güncelleme
+                    elif mtype == 'series_completed':
+                        logger.debug('[TV] series_completed')
+
+    except Exception as e:
+        logger.warning(f'[TV] WS hatası: {type(e).__name__}: {str(e)[:80]}')
+    finally:
+        _ws_connected = False
+
+
 async def _ws_manager_loop():
     """
-    WS bağlantısını yönet: kopunca exponential backoff ile yeniden dene.
+    WS bağlantısını yönet: önce Binance, başarısız olursa TradingView.
     _rest_loop ile paralel çalışır — birbirini bloklamaz.
     """
     retry = 0
     while True:
-        await _ws_loop()   # Bağlı kaldığı sürece burada döner
+        # Önce Binance Futures WS dene
+        await _ws_loop()
 
         if not _ws_connected:
-            retry = min(retry + 1, 6)
-            delay = 2 ** retry          # 2, 4, 8, 16, 32, 64sn
-            logger.info(f"[WS] {delay}sn sonra yeniden bağlanıyor (deneme {retry})")
+            retry = min(retry + 1, 4)
+            delay = 2 ** retry
+            logger.info(f'[WS] Binance bağlanamadı, {delay}sn sonra TradingView deneniyor')
             await asyncio.sleep(delay)
+
+            # TradingView WS dene
+            await _tv_ws_loop()
+
+            if not _ws_connected:
+                logger.info('[WS] Her iki WS başarısız, REST aktif')
+                await asyncio.sleep(30)
         else:
-            retry = 0   # Başarılı bağlandı, sayacı sıfırla
+            retry = 0
 
 
 @app.on_event("startup")

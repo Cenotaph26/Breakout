@@ -363,6 +363,10 @@ async def ws_endpoint(ws: WebSocket):
                         except Exception as e:
                             logger.warning(f"Demo close order: {e}")
                     await ws.send_text(json.dumps({"event":"position_closed",**res}))
+                elif cmd == "candle_from_browser":
+                    c = data.get("candle")
+                    if c:
+                        state.push_candle(c, is_closed=bool(c.get("closed", False)))
                 elif cmd == "update_config":
                     state.update_config(regime=data.get("regime"), params=data.get("params"))
                 elif cmd == "manual_order":

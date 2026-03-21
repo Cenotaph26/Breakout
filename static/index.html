@@ -739,11 +739,68 @@ function flash(dir){ const col=dir==='long'?'#00d97e33':'#ff446633'; document.bo
 // ─── Util ─────────────────────────────────────────────────
 const g=id=>document.getElementById(id);
 
+// ─── Binance Direkt WS (Browser → Binance, REST fallback olmadan canlı veri) ─
+let _bnWs=null, _bnRetry=0, _bnConnected=false;
+
+function connectBinanceWS(){
+  const sym='ethusdt';
+  const url=`wss://fstream.binancefuture.com/stream?streams=${sym}@kline_15m/${sym}@ticker`;
+  try{ _bnWs=new WebSocket(url); }
+  catch(e){ console.warn('[BN-WS]',e); _bnRetryFn(); return; }
+
+  _bnWs.onopen=()=>{
+    _bnConnected=true; _bnRetry=0;
+    console.log('[BN-WS] ✓ Binance direkt stream bağlandı');
+  };
+
+  _bnWs.onmessage=e=>{
+    try{
+      const msg=JSON.parse(e.data);
+      const stream=msg.stream||'', data=msg.data||{};
+
+      if(stream.includes('kline')){
+        const k=data.k; if(!k) return;
+        const c={
+          ts:k.t, open:parseFloat(k.o), high:parseFloat(k.h),
+          low:parseFloat(k.l), close:parseFloat(k.c),
+          volume:parseFloat(k.v), close_ts:k.T, closed:k.x,
+        };
+        mergeC(c, k.x);
+        draw();
+        // Kapanan mum → backend sinyal motorunu tetikle
+        if(k.x){
+          send('candle_from_browser',{candle:c});
+          console.log(`[BN-WS] CLOSED C=${c.close.toFixed(2)}`);
+        }
+      }
+
+      if(stream.includes('ticker')){
+        S.ticker={
+          price:parseFloat(data.c||0), change_pct:parseFloat(data.P||0),
+          high_24h:parseFloat(data.h||0), low_24h:parseFloat(data.l||0),
+          volume_24h:parseFloat(data.v||0),
+        };
+        updTicker();
+      }
+    }catch(err){ console.error('[BN-WS]',err); }
+  };
+
+  _bnWs.onclose=()=>{ _bnConnected=false; _bnRetryFn(); };
+  _bnWs.onerror=()=>{ _bnWs.close(); };
+}
+
+function _bnRetryFn(){
+  _bnRetry=Math.min(_bnRetry+1,6);
+  const d=Math.min(Math.pow(2,_bnRetry)*1000,60000);
+  console.log(`[BN-WS] ${d/1000}sn sonra yeniden bağlanıyor`);
+  setTimeout(connectBinanceWS, d);
+}
+
 // ─── Init ─────────────────────────────────────────────────
 window.addEventListener('resize',()=>{ resize(); draw(); eqMini(); });
 resize(); connectWS();
 setTimeout(()=>{ resize(); draw(); },200);
-setTimeout(()=>loadAcc(),3500);
+setTimeout(()=>{ loadAcc(); connectBinanceWS(); },1000);
 setInterval(()=>loadAcc(),30000);
 </script>
 </body>

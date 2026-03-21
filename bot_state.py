@@ -241,6 +241,8 @@ def push_candle(candle_raw: dict, is_closed: bool = True):
     # Sinyal kontrolü (bot aktifse ve pozisyon yoksa)
     if _bot_running and not _bot_paused and _position is None and n > 50:
         _check_entry_signal(i)
+    elif _bot_running and not _bot_paused and _position is None and n <= 50:
+        _log(f"Yeterli mum yok: {n}/50", "WARN")
 
     # Broadcast
     _broadcast("candle_closed", {
@@ -275,6 +277,7 @@ def _check_entry_signal(i: int):
     cfg  = _cfg
     in_rng = is_range(_candle_objs, i)
     if in_rng:
+        _log(f"RANGE: giriş yok @ {c.c:.2f}", "INFO")
         return
 
     MIN_TOUCH = _MIN_TOUCH; CONFIRM = _CONFIRM; VOL_MULT = _VOL_MULT
@@ -286,18 +289,28 @@ def _check_entry_signal(i: int):
     atr    = calc_atr(_candle_objs, i)
 
     if cfg.vol_filter_min > 0 and atr / c.c < cfg.vol_filter_min:
+        _log(f"VOL_FILTER: atr/c={atr/c.c:.5f} < {cfg.vol_filter_min}", "INFO")
         return
 
     if i < CONFIRM:
         return
 
+    va     = vol_avg(_candle_objs, i)
+    vol_ok = va > 0 and c.v >= va * VOL_MULT
+    if not vol_ok:
+        _log(f"SCAN: C={c.c:.2f} vol={c.v:.0f}/avg={va:.0f}({c.v/va*100 if va>0 else 0:.0f}%) res={'T'+str(_res.touch_count) if _res else 'None'} sup={'T'+str(_sup.touch_count) if _sup else 'None'} mdir={market_direction(_candle_objs,i,cfg.trend_filter_window)}", "INFO")
+    else:
+        _log(f"SCAN✓: C={c.c:.2f} vol={c.v:.0f}/avg={va:.0f}({c.v/va*100:.0f}%) res={'T'+str(_res.touch_count) if _res else 'None'} sup={'T'+str(_sup.touch_count) if _sup else 'None'} mdir={market_direction(_candle_objs,i,cfg.trend_filter_window)}", "INFO")
+
     direction = None
 
     # LONG sinyali
+    # lreq='any' = her piyasa yönünde long al (backtest motoruyla aynı davranış)
+    # lreq='up'  = sadece yükselen trendde long al
     if _res and _res.touch_count >= MIN_TOUCH:
         la = True
-        if cfg.long_trend_req == "up"  and mdir != "up":    la = False
-        if mdir == "down" and cfg.long_trend_req == "any":   la = False
+        if cfg.long_trend_req == "up" and mdir != "up":
+            la = False
         if la:
             all_above = all(_candle_objs[j].c > _res.price_at(j) * (1 + BREAK_MARGIN)
                             for j in range(i - CONFIRM + 1, i + 1))
@@ -310,10 +323,12 @@ def _check_entry_signal(i: int):
                 direction = "long"
 
     # SHORT sinyali
+    # sreq='down' = sadece düşen trendde short al
+    # sreq='any'  = her piyasa yönünde short al
     if direction is None and not cfg.long_only and _sup and _sup.touch_count >= MIN_TOUCH:
         sa = True
-        if cfg.short_trend_req == "down" and mdir != "down": sa = False
-        if mdir == "up" and cfg.short_trend_req == "any":     sa = False
+        if cfg.short_trend_req == "down" and mdir != "down":
+            sa = False
         if sa:
             def mom_ok(d):
                 w = _candle_objs[max(0, i - MOM_K):i + 1]

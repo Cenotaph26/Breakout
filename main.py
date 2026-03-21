@@ -180,19 +180,20 @@ async def _rest_loop():
             for c in candles:
                 c["closed"] = now_ms >= c["close_ts"]
 
-            # Kapalı mumları işle (sinyal motoru tetiklenir)
+            # Tüm mumları işle
             for c in candles:
                 if c["closed"]:
-                    if c["ts"] > _last_closed_ts:
-                        _last_closed_ts = c["ts"]
+                    # Kapalı mum: her zaman push et (sinyal motoru her kapanışta tetiklenir)
+                    # State içinde ts duplicate kontrolü var
+                    if c["ts"] >= _last_closed_ts:
+                        if c["ts"] > _last_closed_ts:
+                            _last_closed_ts = c["ts"]
+                            logger.info(f"[REST] YENİ KAPANIŞ C={c['close']:.2f}")
                         state.push_candle(c, is_closed=True)
-                        logger.info(f"[REST] CLOSED C={c['close']:.2f}")
-
-            # Son açık mumu güncelle (grafik canlı kalır)
-            last = candles[-1]
-            if not last["closed"]:
-                state.push_candle(last, is_closed=False)
-                logger.info(f"[REST] tick C={last['close']:.2f} bot={state._bot_running}")
+                else:
+                    # Açık (canlı) mum: grafik güncelleme
+                    state.push_candle(c, is_closed=False)
+                    logger.info(f"[REST] tick C={c['close']:.2f}")
 
         except Exception as e:
             logger.warning(f"[REST] klines hatası: {e}")
@@ -514,4 +515,4 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False, ws="websockets", ws_ping_interval=20, ws_ping_timeout=30)

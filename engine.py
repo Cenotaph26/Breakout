@@ -272,7 +272,7 @@ def _pnl(direction, entry, exit_p, commission=0.0004):
 
 REGIME_UPDATE_INTERVAL = 2880   # Her 2 günde bir rejim güncelle
 COMMISSION = 0.0004
-PIVOT_N = 2; MIN_TOUCH = 3; CONFIRM = 2
+PIVOT_N = 2; MIN_TOUCH = 2; CONFIRM = 2
 VOL_MULT = 1.1; MOM_K = 3; MOM_MIN = 0.55; BREAK_MARGIN = 0.0005
 
 

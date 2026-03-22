@@ -35,7 +35,7 @@ MAX_CANDLES  = 600      # bellekte tutulacak max 15dk mum
 LOG_MAX      = 500      # log satırı limiti
 REGIME_EVERY = 48       # kaç mumda bir rejim güncellenir (48 × 15dk = 12 saat)
 PIVOT_N      = 2
-LINE_REFRESH = 5
+LINE_REFRESH = 3        # daha sık çizgi güncelleme (3 × 15dk = 45dk)
 
 
 # ─── Veri yapıları ────────────────────────────────────────────────────────────
@@ -464,13 +464,19 @@ def _record_trade(pos: LivePosition, exit_price: float, reason: str, pnl: float,
 
 def _get_lines_dict() -> dict:
     n = len(_candle_objs)
+    # Frontend'e son 200 mum gönderiliyor (get_state: _candles[-200:])
+    # points indeksleri bu 200 mumun 0-based indeksleri olmalı
+    tail = 200
+    start_abs = max(0, n - tail)  # candle_objs'daki başlangıç indeksi
 
     def tl_to_dict(tl: Optional[TrendLine]) -> Optional[dict]:
         if tl is None: return None
-        # Son 100 mumun çizgi fiyatlarını hesapla (grafik için)
-        start = max(0, n - 100)
-        points = [{"i": i, "ts": _candles[i]["ts"], "price": round(tl.price_at(i), 4)}
-                  for i in range(start, n)]
+        points = []
+        for abs_i in range(start_abs, n):
+            rel_i = abs_i - start_abs   # 0..199 arası (frontend S.candles indeksi)
+            price = round(tl.price_at(abs_i), 4)
+            ts    = _candles[abs_i]["ts"] if abs_i < len(_candles) else 0
+            points.append({"i": rel_i, "ts": ts, "price": price})
         return {
             "type": tl.type, "touch_count": tl.touch_count, "age": tl.age,
             "slope": round(tl.slope(), 8), "points": points,

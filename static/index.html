@@ -519,22 +519,49 @@ function _draw(){
 
 function drawTL(tl,color,si,ei,tX,tY,maxX){
   if(!tl||!tl.points||tl.points.length<2) return;
-  const pts=tl.points.filter(p=>p.i>=si&&p.i<=ei);
-  if(pts.length<2) return;
-  const a=Math.min(0.9,0.35+tl.touch_count*0.12);
-  const hex=Math.round(a*255).toString(16).padStart(2,'0');
-  ctx.strokeStyle=color+hex; ctx.lineWidth=Math.min(2.5,1+tl.touch_count*0.3); ctx.setLineDash([]);
-  const f=pts[0],l=pts[pts.length-1];
-  const x1=tX(f.i-si),y1=tY(f.price),x2=tX(l.i-si),y2=tY(l.price);
-  const sl=(y2-y1)/((x2-x1)||1);
-  ctx.beginPath(); ctx.moveTo(0,y1+sl*(0-x1));
-  for(const p of pts) ctx.lineTo(tX(p.i-si),tY(p.price));
-  ctx.lineTo(maxX,y2+sl*(maxX-x2)); ctx.stroke();
-  const mid=pts[Math.floor(pts.length/2)];
-  const mx=tX(mid.i-si),my=tY(mid.price);
-  ctx.fillStyle=color+'22'; ctx.fillRect(mx-16,my-8,32,16);
+  // Tüm noktalar 0-based (S.candles indeksi), si..ei aralığına filtrele
+  const all=tl.points;
+  if(!all.length) return;
+
+  // Slope hesapla (tüm noktalardan)
+  const f=all[0], l=all[all.length-1];
+  const dx=(l.i-f.i)||1, dy=tY(l.price)-tY(f.price);
+  const sl=dy/dx; // piksel/indeks
+
+  // Görünür aralıktaki noktalar
+  const vis=all.filter(p=>p.i>=si&&p.i<=ei);
+
+  // Eğer görünür alanda hiç nokta yoksa bile uzatma çiz
+  const lineAlpha=Math.min(0.9,0.4+tl.touch_count*0.1);
+  const hex=Math.round(lineAlpha*255).toString(16).padStart(2,'0');
+  ctx.strokeStyle=color+hex;
+  ctx.lineWidth=Math.min(2.5,0.8+tl.touch_count*0.25);
+  ctx.setLineDash([]);
+
+  // f noktasından ekranın soluna uzat
+  const x0=tX(f.i-si), y0=tY(f.price);
+  const xL=tX(l.i-si), yL=tY(l.price);
+  // Ekran solunda (x=0) ve sağında (x=maxX) y değerleri
+  const yAtLeft  = y0 + sl*(0-x0);
+  const yAtRight = yL + sl*(maxX-xL);
+
+  ctx.beginPath();
+  ctx.moveTo(0, yAtLeft);
+  if(vis.length>=2){
+    for(const p of vis) ctx.lineTo(tX(p.i-si), tY(p.price));
+  }
+  ctx.lineTo(maxX, yAtRight);
+  ctx.stroke();
+
+  // Badge — ortada
+  const midI=Math.floor((si+ei)/2);
+  const midP=all.find(p=>p.i>=midI)||l;
+  const mx=tX(midP.i-si), my=tY(midP.price);
+  const label='T'+tl.touch_count;
+  const lw=ctx.measureText(label).width+8;
+  ctx.fillStyle=color+'33'; ctx.fillRect(mx-lw/2,my-8,lw,16);
   ctx.fillStyle=color; ctx.font='bold 9px JetBrains Mono'; ctx.textAlign='center';
-  ctx.fillText('T'+tl.touch_count,mx,my+4); ctx.textAlign='left';
+  ctx.fillText(label,mx,my+4); ctx.textAlign='left';
 }
 function hLine(price,color,label,tY,maxX){
   const y=Math.round(tY(price))+.5;

@@ -326,10 +326,21 @@ header{background:var(--bg1);border-bottom:1px solid var(--border);display:flex;
       </div>
     </div>
 
+    <!-- Backtest paneli -->
+    <div id="bt-panel" style="display:none;padding:10px 14px;border-top:1px solid var(--border);background:var(--bg1)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">📊 Backtest Sonuçları</div>
+        <button onclick="document.getElementById('bt-panel').style.display='none'" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">✕</button>
+      </div>
+      <div id="bt-content" style="font-size:10px;font-family:var(--font);color:var(--text)">
+        <div style="color:var(--muted);text-align:center;padding:12px">Yükleniyor...</div>
+      </div>
+    </div>
+
     <div class="dlrow">
       <button class="dlbtn" onclick="location='/export/trades'">⬇ Trades</button>
       <button class="dlbtn" onclick="location='/export/equity'">⬇ Equity</button>
-      <button class="dlbtn" onclick="location='/export/logs'">⬇ Logs</button>
+      <button class="dlbtn" onclick="runBacktest()" style="border-color:var(--blue);color:var(--blue)">📊 Backtest</button>
     </div>
   </div>
 </div>
@@ -771,6 +782,47 @@ async function cancelAll(){
 }
 
 function flash(dir){ const col=dir==='long'?'#00d97e33':'#ff446633'; document.body.style.boxShadow=`inset 0 0 60px ${col}`; setTimeout(()=>document.body.style.boxShadow='',700); }
+
+// ─── Backtest ─────────────────────────────────────────────
+async function runBacktest(){
+  const panel=document.getElementById('bt-panel');
+  const content=document.getElementById('bt-content');
+  panel.style.display='';
+  content.innerHTML='<div style="color:var(--muted);text-align:center;padding:16px">⏳ Çalışıyor (~10sn)...</div>';
+  try{
+    const r=await fetch('/api/backtest').then(r=>r.json());
+    if(r.error){content.innerHTML=`<div style="color:var(--red)">${r.error}</div>`;return;}
+    const rows=r.months.map(mo=>`<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:3px 6px;color:var(--muted)">${mo.name}</td>
+      <td style="padding:3px 6px;text-align:right;color:${mo.eth_ret>=0?'var(--green)':'var(--red)'}">${mo.eth_ret>=0?'+':''}${mo.eth_ret.toFixed(1)}%</td>
+      <td style="padding:3px 6px;text-align:right;color:${mo.bot_ret>=0?'var(--green)':'var(--red)'}"><b>${mo.bot_ret>=0?'+':''}${mo.bot_ret.toFixed(3)}%</b></td>
+      <td style="padding:3px 6px;text-align:right">${mo.trades}</td>
+      <td style="padding:3px 6px;text-align:right;color:${mo.wr>=50?'var(--green)':'var(--red)'}">${mo.wr.toFixed(0)}%</td>
+      <td style="padding:3px 6px;text-align:right">${mo.pf.toFixed(2)}</td>
+    </tr>`).join('');
+    const t=r.total;
+    content.innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:9px">
+      <thead><tr style="color:var(--muted);border-bottom:1px solid var(--border2)">
+        <th style="padding:2px 6px;text-align:left">Ay</th><th style="padding:2px 6px;text-align:right">ETH</th>
+        <th style="padding:2px 6px;text-align:right">Bot</th><th style="padding:2px 6px;text-align:right">Tr</th>
+        <th style="padding:2px 6px;text-align:right">WR</th><th style="padding:2px 6px;text-align:right">PF</th>
+      </tr></thead><tbody>${rows}</tbody>
+      <tfoot><tr style="border-top:1px solid var(--border2);font-weight:700">
+        <td style="padding:4px 6px">TOPLAM</td>
+        <td style="padding:4px 6px;text-align:right;color:var(--red)">${t.eth_ret.toFixed(1)}%</td>
+        <td style="padding:4px 6px;text-align:right;color:${t.bot_ret>=0?'var(--green)':'var(--red)'}">${t.bot_ret>=0?'+':''}${t.bot_ret.toFixed(3)}%</td>
+        <td style="padding:4px 6px;text-align:right">${t.trades}</td>
+        <td style="padding:4px 6px;text-align:right;color:${t.wr>=50?'var(--green)':'var(--red)'}">${t.wr.toFixed(0)}%</td>
+        <td style="padding:4px 6px;text-align:right">${t.pf.toFixed(2)}</td>
+      </tr></tfoot></table>
+      <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:4px;font-family:var(--font)">
+        <div style="background:var(--bg2);border-radius:4px;padding:5px 8px"><div style="font-size:8px;color:var(--muted)">MAX DD</div><div style="font-size:11px;font-weight:700;color:var(--red)">${t.max_dd.toFixed(2)}%</div></div>
+        <div style="background:var(--bg2);border-radius:4px;padding:5px 8px"><div style="font-size:8px;color:var(--muted)">ALPHA</div><div style="font-size:11px;font-weight:700;color:var(--green)">+${t.alpha.toFixed(1)}%</div></div>
+        <div style="background:var(--bg2);border-radius:4px;padding:5px 8px"><div style="font-size:8px;color:var(--muted)">POZ. HAFTA</div><div style="font-size:11px;font-weight:700;color:var(--blue)">${t.pos_weeks}/${t.total_weeks}</div></div>
+        <div style="background:var(--bg2);border-radius:4px;padding:5px 8px"><div style="font-size:8px;color:var(--muted)">WIN/LOSS</div><div style="font-size:11px;font-weight:700">${t.avg_wl.toFixed(2)}x</div></div>
+      </div>`;
+  }catch(e){content.innerHTML=`<div style="color:var(--red)">Hata: ${e.message}</div>`;}
+}
 
 // ─── Util ─────────────────────────────────────────────────
 const g=id=>document.getElementById(id);

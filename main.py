@@ -491,6 +491,100 @@ def export_trades():
     return StreamingResponse(iter([csv_data]), media_type="text/csv",
         headers={"Content-Disposition":"attachment; filename=trades.csv"})
 
+@app.get("/api/backtest")
+async def api_backtest():
+    """5 aylık backtest sonuçlarını döndür."""
+    import csv as csv_mod, io as io_mod
+    from engine import Candle, RegimeConfig, run_adaptive_backtest
+    from collections import defaultdict
+
+    FILES = {
+        "Eki-25": "/mnt/user-data/uploads/ETHUSDT-1m-2025-10.csv",
+        "Kas-25": "/mnt/user-data/uploads/ETHUSDT-1m-2025-11.csv",
+        "Ara-25": "/mnt/user-data/uploads/ETHUSDT-1m-2025-12.csv",
+        "Oca-26": "/mnt/user-data/uploads/ETHUSDT-1m-2026-01.csv",
+        "Şub-26": "/mnt/user-data/uploads/ETHUSDT-1m-2026-02-2.csv",
+    }
+    BEST = RegimeConfig(trend_filter_window=15, trailing_step=0.003, tp1_min_rr=1.5,
+                        long_trend_req="any", short_trend_req="down",
+                        long_only=False, vol_filter_min=0.0)
+
+    def resample(rows):
+        out = []
+        for i in range(0, len(rows) - 14, 15):
+            g = rows[i:i+15]
+            out.append(Candle(g[0]["open_time"], float(g[0]["open"]),
+                max(float(r["high"]) for r in g), min(float(r["low"]) for r in g),
+                float(g[-1]["close"]), sum(float(r["volume"]) for r in g)))
+        return out
+
+    try:
+        months_result = []
+        all_candles = []
+        all_trades_global = []
+
+        for name, path in FILES.items():
+            try:
+                with open(path) as f: rows = list(csv_mod.DictReader(io_mod.StringIO(f.read())))
+            except FileNotFoundError:
+                continue
+            candles = resample(rows)
+            all_candles.extend(candles)
+            eth_ret = (candles[-1].c - candles[0].o) / candles[0].o * 100
+            bt = run_adaptive_backtest(candles, fixed_config=BEST)
+            m  = bt["metrics"]
+            all_trades_global.extend(bt["trades"])
+            months_result.append({
+                "name": name, "eth_ret": round(eth_ret, 2),
+                "bot_ret": round(bt["total_return_pct"], 3),
+                "trades": m["total_trades"], "wr": round(m["win_rate"], 1),
+                "pf": round(m["profit_factor"], 3),
+                "max_dd": round(m["max_drawdown_pct"], 2),
+            })
+
+        if not all_candles:
+            return {"error": "CSV dosyaları bulunamadı"}
+
+        # 5 ay birleşik
+        bt_all = run_adaptive_backtest(all_candles, fixed_config=BEST)
+        m_all  = bt_all["metrics"]
+        all_trades = bt_all["trades"]
+
+        wins   = [t for t in all_trades if t.pnl_pct > 0]
+        losses = [t for t in all_trades if t.pnl_pct <= 0]
+        avg_win  = sum(t.pnl_pct for t in wins)   / len(wins)   if wins   else 0
+        avg_loss = abs(sum(t.pnl_pct for t in losses) / len(losses)) if losses else 1
+        avg_wl   = avg_win / avg_loss if avg_loss else 0
+
+        weekly = defaultdict(float)
+        for t in all_trades:
+            ts_ms = int(all_candles[t.entry_i].ts)
+            weekly[ts_ms // (7*24*3600*1000)] += t.pnl_pct * 100
+        weeks = list(weekly.values())
+        pos_weeks = sum(1 for w in weeks if w > 0)
+
+        eth_total = (all_candles[-1].c - all_candles[0].o) / all_candles[0].o * 100
+
+        return {
+            "months": months_result,
+            "total": {
+                "eth_ret": round(eth_total, 2),
+                "bot_ret": round(bt_all["total_return_pct"], 3),
+                "trades": m_all["total_trades"],
+                "wr": round(m_all["win_rate"], 1),
+                "pf": round(m_all["profit_factor"], 3),
+                "max_dd": round(m_all["max_drawdown_pct"], 2),
+                "alpha": round(bt_all["total_return_pct"] - eth_total, 2),
+                "pos_weeks": pos_weeks, "total_weeks": len(weeks),
+                "avg_wl": round(avg_wl, 2),
+            }
+        }
+    except Exception as e:
+        logger.error(f"Backtest hatası: {e}")
+        import traceback; traceback.print_exc()
+        return {"error": str(e)}
+
+
 @app.get("/export/logs")
 def export_logs():
     lines = "\n".join(f"[{l['time']}] {l['level']}: {l['msg']}" for l in state.get_logs())
